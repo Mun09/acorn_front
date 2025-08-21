@@ -46,18 +46,35 @@ export interface AuthResponse {
 }
 
 // 포스트 관련 타입
+export interface MediaItem {
+  url: string;
+  type: "image" | "video";
+}
+
+export interface PostSymbol {
+  symbolId: number;
+  symbol: Symbol;
+}
+
 export interface Post {
   id: number;
   userId: number;
   text: string;
-  media?: any;
+  media?: MediaItem[] | null;
   createdAt: string;
   replyTo?: number;
   quotePostId?: number;
   isHidden: boolean;
   user: User;
+  symbols?: PostSymbol[];
   reactions?: Reaction[];
   replies?: Post[];
+  _count?: {
+    reactions: number;
+    replies: number;
+  };
+  reactionCounts?: Record<string, number>;
+  userReactions?: string[]; // 현재 사용자가 한 리액션 타입들
 }
 
 export interface Reaction {

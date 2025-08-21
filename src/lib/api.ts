@@ -1,163 +1,333 @@
-// API 클라이언트 설정
+// API 클라이언트 설정 (Fetch 기반)
 
-import axios, { AxiosInstance, AxiosResponse } from "axios";
-import { AuthTokens, ApiResponse } from "@/types";
-import { storage } from "./utils";
+import { z } from "zod";
 import { env, getApiUrl, logger, isDevelopment } from "./config";
 
-// Axios 인스턴스 생성
-export const apiClient: AxiosInstance = axios.create({
-  baseURL: env.NEXT_PUBLIC_API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
+// 공통 에러 타입
+export interface ApiError {
+  status: number;
+  code?: string;
+  message: string;
+}
+
+// API 응답 타입
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: ApiError;
+  message?: string;
+}
+
+// 쿠키 유틸리티
+const cookieUtils = {
+  get(name: string): string | null {
+    if (typeof document === "undefined") return null;
+
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) {
+      return parts.pop()?.split(";").shift() || null;
+    }
+    return null;
   },
-  timeout: 10000,
-});
+
+  set(name: string, value: string, days: number = 7): void {
+    if (typeof document === "undefined") return;
+
+    const expires = new Date();
+    expires.setTime(expires.getTime() + days * 24 * 60 * 60 * 1000);
+    document.cookie = `${name}=${value};expires=${expires.toUTCString()};path=/;secure;samesite=strict`;
+  },
+
+  remove(name: string): void {
+    if (typeof document === "undefined") return;
+
+    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
+  },
+};
 
 // 토큰 관리
-const TOKEN_STORAGE_KEY = "acorn_tokens";
-
 export const tokenManager = {
-  getTokens(): AuthTokens | null {
-    return storage.get(TOKEN_STORAGE_KEY);
+  getToken(): string | null {
+    return cookieUtils.get("acorn_token");
   },
 
-  setTokens(tokens: AuthTokens): void {
-    storage.set(TOKEN_STORAGE_KEY, tokens);
+  setToken(token: string): void {
+    cookieUtils.set("acorn_token", token);
   },
 
-  clearTokens(): void {
-    storage.remove(TOKEN_STORAGE_KEY);
-  },
-
-  getAccessToken(): string | null {
-    const tokens = this.getTokens();
-    return tokens?.accessToken || null;
+  clearToken(): void {
+    cookieUtils.remove("acorn_token");
   },
 };
 
-// 요청 인터셉터 - 자동으로 토큰 추가
-apiClient.interceptors.request.use(
-  (config) => {
-    const accessToken = tokenManager.getAccessToken();
-    if (accessToken) {
-      config.headers.Authorization = `Bearer ${accessToken}`;
-    }
-    return config;
-  },
-  (error) => {
-    return Promise.reject(error);
+// 커스텀 fetch 래퍼
+export class ApiFetch {
+  private baseURL: string;
+  private onUnauthorized?: () => void;
+
+  constructor(baseURL: string) {
+    this.baseURL = baseURL;
   }
-);
 
-// 응답 인터셉터 - 401 에러 시 토큰 갱신 시도
-apiClient.interceptors.response.use(
-  (response: AxiosResponse) => {
-    return response;
-  },
-  async (error) => {
-    const originalRequest = error.config;
+  // 인증 실패 시 콜백 설정
+  setUnauthorizedHandler(handler: () => void): void {
+    this.onUnauthorized = handler;
+  }
 
-    // 401 에러이고 아직 재시도하지 않은 경우
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
+  // 기본 fetch 옵션 생성
+  private createRequestOptions(options: RequestInit = {}): RequestInit {
+    const token = tokenManager.getToken();
 
-      const tokens = tokenManager.getTokens();
-      if (tokens?.refreshToken) {
-        try {
-          // 토큰 갱신 시도
-          const response = await axios.post(getApiUrl("/api/auth/refresh"), {
-            refreshToken: tokens.refreshToken,
-          });
+    const defaultOptions: RequestInit = {
+      headers: {
+        "Content-Type": "application/json",
+        ...options.headers,
+      },
+      ...options,
+    };
 
-          const newTokens: AuthTokens = {
-            accessToken: response.data.data.accessToken,
-            refreshToken: tokens.refreshToken, // 기존 refresh token 유지
-            expiresIn: response.data.data.expiresIn,
-          };
+    // 토큰이 있으면 Authorization 헤더 추가
+    if (token) {
+      (defaultOptions.headers as Record<string, string>)["Authorization"] =
+        `Bearer ${token}`;
+    }
 
-          tokenManager.setTokens(newTokens);
+    return defaultOptions;
+  }
 
-          // 원래 요청에 새 토큰 적용하여 재시도
-          originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`;
-          return apiClient(originalRequest);
-        } catch (refreshError) {
-          // 갱신 실패 시 로그아웃
-          if (isDevelopment) {
-            logger.warn("토큰 갱신 실패:", refreshError);
-          }
-          tokenManager.clearTokens();
-          window.location.href = "/auth/login";
-          return Promise.reject(refreshError);
-        }
-      } else {
-        // refresh token이 없으면 로그인 페이지로
-        window.location.href = "/auth/login";
+  // URL 생성
+  private createURL(endpoint: string): string {
+    return `${this.baseURL}${endpoint}`;
+  }
+
+  // 응답 처리
+  private async handleResponse<T>(response: Response): Promise<T> {
+    // 401 Unauthorized 처리
+    if (response.status === 401) {
+      if (isDevelopment) {
+        logger.warn("API 401 Unauthorized - 토큰 삭제 및 리다이렉트");
       }
+
+      tokenManager.clearToken();
+
+      if (this.onUnauthorized) {
+        this.onUnauthorized();
+      } else if (typeof window !== "undefined") {
+        window.location.href = "/login";
+      }
+
+      throw new ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.");
     }
 
-    return Promise.reject(error);
-  }
-);
+    let data: any;
+    const contentType = response.headers.get("content-type");
 
-// API 헬퍼 함수들
-export const api = {
+    if (contentType && contentType.includes("application/json")) {
+      data = await response.json();
+    } else {
+      data = await response.text();
+    }
+
+    if (!response.ok) {
+      throw new ApiError(
+        response.status,
+        data.code || response.statusText,
+        data.message || `HTTP ${response.status} ${response.statusText}`
+      );
+    }
+
+    return data;
+  }
+
   // GET 요청
-  get: <T = any>(url: string, params?: any): Promise<ApiResponse<T>> => {
-    return apiClient.get(url, { params }).then((res) => res.data);
-  },
+  async get<T>(endpoint: string, schema?: z.ZodSchema<T>): Promise<T> {
+    const url = this.createURL(endpoint);
+    const options = this.createRequestOptions({ method: "GET" });
+
+    if (isDevelopment) {
+      logger.info("GET", url);
+    }
+
+    const response = await fetch(url, options);
+    const data = await this.handleResponse<T>(response);
+
+    // Zod 스키마 검증
+    if (schema) {
+      return schema.parse(data);
+    }
+
+    return data;
+  }
 
   // POST 요청
-  post: <T = any>(url: string, data?: any): Promise<ApiResponse<T>> => {
-    return apiClient.post(url, data).then((res) => res.data);
-  },
+  async post<T>(
+    endpoint: string,
+    body?: any,
+    schema?: z.ZodSchema<T>
+  ): Promise<T> {
+    const url = this.createURL(endpoint);
+    const options = this.createRequestOptions({
+      method: "POST",
+      body: body ? JSON.stringify(body) : undefined,
+    });
 
-  // PUT 요청
-  put: <T = any>(url: string, data?: any): Promise<ApiResponse<T>> => {
-    return apiClient.put(url, data).then((res) => res.data);
-  },
+    if (isDevelopment) {
+      logger.info("POST", url, body);
+    }
 
-  // DELETE 요청
-  delete: <T = any>(url: string): Promise<ApiResponse<T>> => {
-    return apiClient.delete(url).then((res) => res.data);
-  },
+    const response = await fetch(url, options);
+    const data = await this.handleResponse<T>(response);
+
+    // Zod 스키마 검증
+    if (schema) {
+      return schema.parse(data);
+    }
+
+    return data;
+  }
 
   // PATCH 요청
-  patch: <T = any>(url: string, data?: any): Promise<ApiResponse<T>> => {
-    return apiClient.patch(url, data).then((res) => res.data);
-  },
-};
+  async patch<T>(
+    endpoint: string,
+    body?: any,
+    schema?: z.ZodSchema<T>
+  ): Promise<T> {
+    const url = this.createURL(endpoint);
+    const options = this.createRequestOptions({
+      method: "PATCH",
+      body: body ? JSON.stringify(body) : undefined,
+    });
 
-// 특정 API 엔드포인트들
+    if (isDevelopment) {
+      logger.info("PATCH", url, body);
+    }
+
+    const response = await fetch(url, options);
+    const data = await this.handleResponse<T>(response);
+
+    // Zod 스키마 검증
+    if (schema) {
+      return schema.parse(data);
+    }
+
+    return data;
+  }
+
+  // DELETE 요청
+  async delete<T>(endpoint: string, schema?: z.ZodSchema<T>): Promise<T> {
+    const url = this.createURL(endpoint);
+    const options = this.createRequestOptions({ method: "DELETE" });
+
+    if (isDevelopment) {
+      logger.info("DELETE", url);
+    }
+
+    const response = await fetch(url, options);
+    const data = await this.handleResponse<T>(response);
+
+    // Zod 스키마 검증
+    if (schema) {
+      return schema.parse(data);
+    }
+
+    return data;
+  }
+}
+
+// 커스텀 ApiError 클래스
+export class ApiError extends Error {
+  public status: number;
+  public code?: string;
+
+  constructor(status: number, code?: string, message?: string) {
+    super(message || `API Error ${status}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+// API 클라이언트 인스턴스
+export const apiClient = new ApiFetch(env.NEXT_PUBLIC_API_BASE_URL);
+
+// 401 처리를 위한 훅
+export function useApiUnauthorizedHandler() {
+  const handleUnauthorized = () => {
+    if (isDevelopment) {
+      logger.warn("사용자 인증 만료 - 로그인 페이지로 이동");
+    }
+
+    // 토큰 삭제
+    tokenManager.clearToken();
+
+    // 로그인 페이지로 리다이렉트
+    if (typeof window !== "undefined") {
+      window.location.href = "/login";
+    }
+  };
+
+  // API 클라이언트에 핸들러 설정
+  apiClient.setUnauthorizedHandler(handleUnauthorized);
+
+  return { handleUnauthorized };
+}
+// API 엔드포인트 헬퍼들
 export const authApi = {
   login: (email: string, password: string) =>
-    api.post("/api/auth/login", { email, password }),
+    apiClient.post("/api/auth/login", { email, password }),
 
   signup: (email: string, handle: string, password: string) =>
-    api.post("/api/auth/signup", { email, handle, password }),
+    apiClient.post("/api/auth/signup", { email, handle, password }),
 
-  logout: (refreshToken: string) =>
-    api.post("/api/auth/logout", { refreshToken }),
+  logout: () => apiClient.post("/api/auth/logout"),
 
-  logoutAll: () => api.post("/api/auth/logout-all"),
+  getMe: () => apiClient.get("/api/auth/me"),
 
-  getMe: () => api.get("/api/auth/me"),
-
-  refresh: (refreshToken: string) =>
-    api.post("/api/auth/refresh", { refreshToken }),
+  refresh: () => apiClient.post("/api/auth/refresh"),
 };
 
 export const postsApi = {
-  getFeed: (page = 1, limit = 20) => api.get("/api/posts", { page, limit }),
+  getFeed: (params?: any) => apiClient.get("/api/posts", undefined),
 
-  getPost: (id: number) => api.get(`/api/posts/${id}`),
+  getPost: (id: number) => apiClient.get(`/api/posts/${id}`),
 
-  createPost: (text: string, media?: any) =>
-    api.post("/api/posts", { text, media }),
+  createPost: (
+    text: string,
+    media?: Array<{ url: string; type: "image" | "video" }>
+  ) => apiClient.post("/api/posts", { text, media }),
 
-  deletePost: (id: number) => api.delete(`/api/posts/${id}`),
+  updatePost: (
+    id: number,
+    text: string,
+    media?: Array<{ url: string; type: "image" | "video" }>
+  ) => apiClient.patch(`/api/posts/${id}`, { text, media }),
 
-  likePost: (id: number) => api.post(`/api/posts/${id}/like`),
+  deletePost: (id: number) => apiClient.delete(`/api/posts/${id}`),
 
-  unlikePost: (id: number) => api.delete(`/api/posts/${id}/like`),
+  reactToPost: (id: number, type: "LIKE" | "BOOKMARK" | "BOOST") =>
+    apiClient.post(`/api/posts/${id}/react`, { type }),
+
+  unreactToPost: (id: number, type: "LIKE" | "BOOKMARK" | "BOOST") =>
+    apiClient.delete(`/api/posts/${id}/react/${type}`),
 };
+
+export const usersApi = {
+  getProfile: (handle: string) => apiClient.get(`/api/users/${handle}`),
+
+  updateProfile: (data: any) => apiClient.patch("/api/users/me", data),
+
+  followUser: (handle: string) => apiClient.post(`/api/users/${handle}/follow`),
+
+  unfollowUser: (handle: string) =>
+    apiClient.delete(`/api/users/${handle}/follow`),
+
+  getFollowers: (handle: string) =>
+    apiClient.get(`/api/users/${handle}/followers`),
+
+  getFollowing: (handle: string) =>
+    apiClient.get(`/api/users/${handle}/following`),
+};
+
+// 기본 export
+export default apiClient;
