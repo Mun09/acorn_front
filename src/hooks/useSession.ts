@@ -1,7 +1,6 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiClient } from "@/lib/api";
 import { z } from "zod";
 
 // 백엔드 응답과 일치하는 User 스키마
@@ -25,35 +24,71 @@ export type User = z.infer<typeof UserSchema>;
 export type Session = z.infer<typeof SessionSchema>;
 
 export function useSession() {
-  return useQuery({
+  const query = useQuery({
     queryKey: ["session"],
     queryFn: async (): Promise<Session> => {
+      console.log("🔍 Starting session fetch...");
+
       try {
-        const response = await fetch("/api/session");
+        // 401 응답에 대한 자동 리다이렉트 방지를 위해 직접 fetch 사용
+        const response = await fetch("/api/session", {
+          credentials: "include", // 쿠키 포함
+        });
+        console.log("📡 Got response:", response.status, response.ok);
 
         if (!response.ok) {
-          return { user: null as any, isAuthenticated: false };
+          console.log("❌ Response not ok, returning false auth");
+          const result = { user: null as any, isAuthenticated: false };
+          console.log("🔄 Returning result:", result);
+          return result;
         }
 
         const data = await response.json();
+        console.log("📦 Parsed JSON data:", data);
 
         if (data.error) {
-          return { user: null as any, isAuthenticated: false };
+          console.log("❌ Error in data, returning false auth");
+          const result = { user: null as any, isAuthenticated: false };
+          console.log("🔄 Returning result:", result);
+          return result;
         }
 
         // 백엔드 응답 구조: { message, data: { user } }
+        console.log("🔍 Parsing user data...");
         const user = UserSchema.parse(data.data.user);
-        return {
+        console.log("✅ Successfully parsed user:", user);
+
+        const result = {
           user,
           isAuthenticated: true,
         };
+        console.log("🔄 Returning authenticated result:", result);
+        return result;
       } catch (error) {
-        return { user: null as any, isAuthenticated: false };
+        console.error("💥 Session fetch error:", error);
+        const result = { user: null as any, isAuthenticated: false };
+        console.log("🔄 Returning error result:", result);
+        return result;
       }
     },
     retry: false,
     staleTime: 5 * 60 * 1000, // 5분
+    // 자동 리페치 비활성화로 불필요한 401 요청 방지
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
+    refetchOnReconnect: false,
   });
+
+  console.log("🔄 useSession query state:", {
+    data: query.data,
+    isLoading: query.isLoading,
+    isError: query.isError,
+    error: query.error,
+    status: query.status,
+    fetchStatus: query.fetchStatus,
+  });
+
+  return query;
 }
 
 export function useLogout() {

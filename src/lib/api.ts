@@ -77,21 +77,15 @@ export class ApiFetch {
 
   // 기본 fetch 옵션 생성
   private createRequestOptions(options: RequestInit = {}): RequestInit {
-    const token = tokenManager.getToken();
-
+    // httpOnly 쿠키 사용으로 Authorization 헤더 불필요
     const defaultOptions: RequestInit = {
+      credentials: "include", // httpOnly 쿠키 포함 (가장 중요!)
       headers: {
         "Content-Type": "application/json",
         ...options.headers,
       },
       ...options,
     };
-
-    // 토큰이 있으면 Authorization 헤더 추가
-    if (token) {
-      (defaultOptions.headers as Record<string, string>)["Authorization"] =
-        `Bearer ${token}`;
-    }
 
     return defaultOptions;
   }
@@ -114,7 +108,11 @@ export class ApiFetch {
       if (this.onUnauthorized) {
         this.onUnauthorized();
       } else if (typeof window !== "undefined") {
-        window.location.href = "/login";
+        // 홈페이지에서는 자동 리다이렉트하지 않음
+        const currentPath = window.location.pathname;
+        if (currentPath !== "/" && currentPath !== "/home") {
+          window.location.href = "/login";
+        }
       }
 
       throw new ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.");
@@ -261,9 +259,12 @@ export function useApiUnauthorizedHandler() {
     // 토큰 삭제
     tokenManager.clearToken();
 
-    // 로그인 페이지로 리다이렉트
+    // 홈페이지에서는 자동 리다이렉트하지 않음
     if (typeof window !== "undefined") {
-      window.location.href = "/login";
+      const currentPath = window.location.pathname;
+      if (currentPath !== "/" && currentPath !== "/home") {
+        window.location.href = "/login";
+      }
     }
   };
 
@@ -288,7 +289,8 @@ export const authApi = {
 };
 
 export const postsApi = {
-  getFeed: (params?: any) => apiClient.get("/api/posts", undefined),
+  getFeed: (queryString?: string) =>
+    apiClient.get(`/api/feed${queryString ? `?${queryString}` : ""}`),
 
   getPost: (id: number) => apiClient.get(`/api/posts/${id}`),
 

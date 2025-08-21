@@ -27,7 +27,7 @@ interface SidebarItem {
 const sidebarItems: SidebarItem[] = [
   {
     icon: Home,
-    label: "For You",
+    label: "홈",
     href: "/",
   },
   {

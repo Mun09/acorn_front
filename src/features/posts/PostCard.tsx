@@ -26,7 +26,7 @@ export function PostCard({ post, className }: PostCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const queryClient = useQueryClient();
 
-  // 리액션 뮤테이션
+  // 리액션 뮤테이션 (낙관적 업데이트 포함)
   const reactMutation = useMutation({
     mutationFn: ({
       type,
@@ -39,9 +39,76 @@ export function PostCard({ post, className }: PostCardProps) {
         ? postsApi.reactToPost(post.id, type)
         : postsApi.unreactToPost(post.id, type);
     },
-    onSuccess: () => {
+    onMutate: async ({ type, isReacting }) => {
+      // 현재 쿼리 취소
+      await queryClient.cancelQueries({ queryKey: ["posts"] });
+
+      // 이전 데이터 백업
+      const previousData = queryClient.getQueryData(["posts", "for_you"]);
+      const previousFollowingData = queryClient.getQueryData([
+        "posts",
+        "following",
+      ]);
+
+      // 낙관적 업데이트 수행
+      const updatePostReaction = (oldData: any) => {
+        if (!oldData) return oldData;
+
+        return {
+          ...oldData,
+          pages: oldData.pages.map((page: any) => ({
+            ...page,
+            data: {
+              ...page.data,
+              posts:
+                page.data?.posts?.map((p: Post) => {
+                  if (p.id === post.id) {
+                    const currentReactions = p.userReactions || [];
+                    const currentCounts = p.reactionCounts || {};
+
+                    return {
+                      ...p,
+                      userReactions: isReacting
+                        ? [...currentReactions, type]
+                        : currentReactions.filter((r) => r !== type),
+                      reactionCounts: {
+                        ...currentCounts,
+                        [type]: isReacting
+                          ? (currentCounts[type] || 0) + 1
+                          : Math.max(0, (currentCounts[type] || 0) - 1),
+                      },
+                    };
+                  }
+                  return p;
+                }) || [],
+            },
+          })),
+        };
+      };
+
+      // For You 피드 업데이트
+      queryClient.setQueryData(["posts", "for_you"], updatePostReaction);
+
+      // Following 피드 업데이트
+      queryClient.setQueryData(["posts", "following"], updatePostReaction);
+
+      return { previousData, previousFollowingData };
+    },
+    onError: (err, variables, context) => {
+      // 에러 시 이전 데이터로 롤백
+      if (context?.previousData) {
+        queryClient.setQueryData(["posts", "for_you"], context.previousData);
+      }
+      if (context?.previousFollowingData) {
+        queryClient.setQueryData(
+          ["posts", "following"],
+          context.previousFollowingData
+        );
+      }
+    },
+    onSettled: () => {
+      // 성공/실패 상관없이 백그라운드에서 새로고침
       queryClient.invalidateQueries({ queryKey: ["posts"] });
-      queryClient.invalidateQueries({ queryKey: ["post", post.id] });
     },
   });
 

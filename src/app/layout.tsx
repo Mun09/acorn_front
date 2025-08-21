@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers/Providers";
-import { Nav } from "@/components/Nav";
 import { Sidebar } from "@/components/Sidebar";
+import { Nav } from "@/components/Nav";
 
 // 폰트 설정
 const inter = Inter({ subsets: ["latin"] });

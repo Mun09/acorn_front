@@ -1,145 +1,263 @@
 "use client";
 
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef, useEffect } from "react";
 import Link from "next/link";
 import { useSession } from "@/hooks/useSession";
+import { postsApi } from "@/lib/api";
+import { PostCard } from "@/features/posts/PostCard";
+import { PostComposer } from "@/features/posts/PostComposer";
 import { Button } from "@/components/ui/Button";
-import { TrendingUp, Users, MessageCircle, Bookmark } from "lucide-react";
+
+// 간단한 Intersection Observer 훅
+function useIntersectionObserver(callback: () => void, deps: any[]) {
+  const targetRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const target = targetRef.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          callback();
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, deps);
+
+  return targetRef;
+}
 
 export default function HomePage() {
-  const { data: session, isLoading } = useSession();
+  const {
+    data: session,
+    isLoading: sessionLoading,
+    error: sessionError,
+    isError: sessionIsError,
+  } = useSession();
+  const queryClient = useQueryClient();
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <div className="text-lg text-muted-foreground">로딩 중...</div>
-      </div>
-    );
-  }
+  const isAuthenticated = session?.isAuthenticated === true;
+
+  // For You 피드 데이터 가져오기 (로그인된 사용자만)
+  const {
+    data,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: ["posts", "for_you"],
+    queryFn: async ({ pageParam = undefined }) => {
+      const params = new URLSearchParams({
+        mode: "for_you",
+        limit: "20",
+      });
+      if (pageParam) {
+        params.append("cursor", pageParam);
+      }
+      return postsApi.getFeed(params.toString());
+    },
+    getNextPageParam: (lastPage: any) => {
+      return lastPage.data?.nextCursor || undefined;
+    },
+    initialPageParam: undefined,
+    enabled: !sessionLoading && isAuthenticated, // 세션 로딩이 끝나고 인증된 사용자만
+  });
+
+  // 무한 스크롤을 위한 Intersection Observer
+  const loadMoreRef = useIntersectionObserver(() => {
+    if (hasNextPage && !isFetchingNextPage) {
+      fetchNextPage();
+    }
+  }, [hasNextPage, isFetchingNextPage]);
+
+  // 포스트 작성 성공 시 피드 새로고침
+  const handlePostSuccess = () => {
+    queryClient.invalidateQueries({ queryKey: ["posts", "for_you"] });
+  };
+
+  // 모든 포스트 플래튼화
+  const posts =
+    data?.pages.flatMap((page: any) => page.data?.posts || []) || [];
 
   return (
-    <div className="space-y-6">
-      {session?.isAuthenticated ? (
-        <>
-          {/* 환영 메시지 */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <h1 className="text-2xl font-bold text-foreground mb-2">
-              환영합니다, @{session.user.handle}님!
+    <div className="max-w-2xl mx-auto">
+      {/* 세션 로딩 중 */}
+      {sessionLoading && (
+        <div className="space-y-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="border border-border rounded-lg p-4">
+              <div className="animate-pulse">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-10 h-10 bg-muted rounded-full"></div>
+                  <div className="space-y-1">
+                    <div className="h-4 bg-muted rounded w-20"></div>
+                    <div className="h-3 bg-muted rounded w-16"></div>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <div className="h-4 bg-muted rounded w-full"></div>
+                  <div className="h-4 bg-muted rounded w-3/4"></div>
+                </div>
+                <div className="flex items-center space-x-8 mt-4">
+                  <div className="h-4 bg-muted rounded w-12"></div>
+                  <div className="h-4 bg-muted rounded w-12"></div>
+                  <div className="h-4 bg-muted rounded w-12"></div>
+                  <div className="h-4 bg-muted rounded w-8"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* 로그인하지 않은 사용자에게 로그인 유도 */}
+      {!sessionLoading && !isAuthenticated && (
+        <div className="text-center py-16">
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-foreground mb-4">
+              Acorn에 로그인하세요
             </h1>
-            <p className="text-muted-foreground">
-              오늘도 흥미로운 금융 토론에 참여해보세요.
+            <p className="text-xl text-muted-foreground mb-8">
+              피드를 보려면 로그인이 필요합니다
             </p>
           </div>
 
-          {/* 대시보드 카드들 */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-card border border-border rounded-lg p-4">
-              <div className="flex items-center space-x-3">
-                <TrendingUp className="w-8 h-8 text-green-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">신뢰 점수</p>
-                  <p className="text-xl font-bold text-foreground">
-                    {session.user.trustScore}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-card border border-border rounded-lg p-4">
-              <div className="flex items-center space-x-3">
-                <Users className="w-8 h-8 text-blue-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">팔로워</p>
-                  <p className="text-xl font-bold text-foreground">1.2K</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-card border border-border rounded-lg p-4">
-              <div className="flex items-center space-x-3">
-                <MessageCircle className="w-8 h-8 text-purple-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">게시물</p>
-                  <p className="text-xl font-bold text-foreground">47</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-card border border-border rounded-lg p-4">
-              <div className="flex items-center space-x-3">
-                <Bookmark className="w-8 h-8 text-orange-500" />
-                <div>
-                  <p className="text-sm text-muted-foreground">북마크</p>
-                  <p className="text-xl font-bold text-foreground">23</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 메인 피드 영역 */}
-          <div className="bg-card border border-border rounded-lg p-6">
-            <h2 className="text-lg font-semibold text-foreground mb-4">
-              For You 피드
-            </h2>
-            <div className="space-y-4 text-center text-muted-foreground">
-              <p>아직 피드가 비어있습니다.</p>
-              <p>팔로우할 사용자를 찾아보거나 첫 게시물을 작성해보세요!</p>
-            </div>
-          </div>
-        </>
-      ) : (
-        <div className="text-center space-y-6 py-12">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold text-foreground">
-              Acorn에 오신 것을 환영합니다
-            </h1>
-            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              금융과 투자에 대한 통찰력 있는 토론을 나누고, 신뢰할 수 있는
-              커뮤니티에서 함께 성장하세요.
-            </p>
-          </div>
-
-          <div className="flex gap-4 justify-center">
-            <Link href="/signup">
-              <Button size="lg">지금 시작하기</Button>
+          <div className="space-y-4">
+            <Link
+              href="/login"
+              className="inline-block bg-primary text-primary-foreground px-8 py-3 rounded-lg font-semibold hover:bg-primary/90 transition-colors"
+            >
+              로그인
             </Link>
-            <Link href="/login">
-              <Button variant="outline" size="lg">
-                로그인
-              </Button>
-            </Link>
-          </div>
-
-          {/* 특징 소개 */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
-            <div className="text-center space-y-2">
-              <TrendingUp className="w-12 h-12 text-primary mx-auto" />
-              <h3 className="text-lg font-semibold text-foreground">
-                실시간 시장 분석
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                최신 시장 동향과 전문가들의 분석을 실시간으로 확인하세요.
-              </p>
-            </div>
-            <div className="text-center space-y-2">
-              <Users className="w-12 h-12 text-primary mx-auto" />
-              <h3 className="text-lg font-semibold text-foreground">
-                신뢰 기반 커뮤니티
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                검증된 투자자들과 함께 신뢰할 수 있는 정보를 공유하세요.
-              </p>
-            </div>
-            <div className="text-center space-y-2">
-              <MessageCircle className="w-12 h-12 text-primary mx-auto" />
-              <h3 className="text-lg font-semibold text-foreground">
-                깊이 있는 토론
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                수준 높은 금융 토론에 참여하고 인사이트를 나누세요.
-              </p>
+            <div className="text-muted-foreground">
+              계정이 없으신가요?{" "}
+              <Link href="/signup" className="text-primary hover:underline">
+                회원가입
+              </Link>
             </div>
           </div>
         </div>
+      )}
+
+      {/* 로그인된 사용자를 위한 피드 */}
+      {!sessionLoading && isAuthenticated && (
+        <>
+          {/* 포스트 작성기 */}
+          <div className="mb-6">
+            <PostComposer onSuccess={handlePostSuccess} />
+          </div>
+
+          {/* 새로고침 버튼 */}
+          <div className="mb-4">
+            <Button
+              onClick={() => refetch()}
+              disabled={isLoading}
+              variant="outline"
+              size="sm"
+            >
+              새로고침
+            </Button>
+          </div>
+
+          {/* 에러 상태 */}
+          {isError && (
+            <div className="text-center py-8">
+              <div className="text-destructive mb-4">
+                <p className="text-lg font-semibold">
+                  피드를 불러올 수 없습니다
+                </p>
+                <p className="text-sm">{error?.message || "알 수 없는 오류"}</p>
+              </div>
+              <Button onClick={() => refetch()} variant="outline">
+                다시 시도
+              </Button>
+            </div>
+          )}
+
+          {/* 로딩 상태 */}
+          {isLoading && !isError && (
+            <div className="space-y-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="border border-border rounded-lg p-4">
+                  <div className="animate-pulse">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <div className="w-10 h-10 bg-muted rounded-full"></div>
+                      <div className="space-y-1">
+                        <div className="h-4 bg-muted rounded w-20"></div>
+                        <div className="h-3 bg-muted rounded w-16"></div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="h-4 bg-muted rounded w-full"></div>
+                      <div className="h-4 bg-muted rounded w-3/4"></div>
+                    </div>
+                    <div className="flex items-center space-x-8 mt-4">
+                      <div className="h-4 bg-muted rounded w-12"></div>
+                      <div className="h-4 bg-muted rounded w-12"></div>
+                      <div className="h-4 bg-muted rounded w-12"></div>
+                      <div className="h-4 bg-muted rounded w-8"></div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* 피드 내용 */}
+          {!isLoading && !isError && (
+            <>
+              <div className="space-y-4">
+                {posts.map((post: any) => (
+                  <PostCard key={post.id} post={post} />
+                ))}
+              </div>
+
+              {/* 무한 스크롤 트리거 */}
+              {hasNextPage && (
+                <div ref={loadMoreRef} className="py-8 text-center">
+                  {isFetchingNextPage ? (
+                    <div className="text-muted-foreground">
+                      더 불러오는 중...
+                    </div>
+                  ) : (
+                    <div className="text-muted-foreground">
+                      더 많은 게시물 불러오기
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* 더 이상 로드할 게시물이 없을 때 */}
+              {!hasNextPage && posts.length > 0 && (
+                <div className="py-8 text-center text-muted-foreground">
+                  모든 게시물을 확인했습니다
+                </div>
+              )}
+
+              {/* 게시물이 없을 때 */}
+              {posts.length === 0 && (
+                <div className="text-center py-12">
+                  <p className="text-lg text-muted-foreground mb-4">
+                    아직 게시물이 없습니다
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    첫 번째 게시물을 작성해보세요!
+                  </p>
+                </div>
+              )}
+            </>
+          )}
+        </>
       )}
     </div>
   );
