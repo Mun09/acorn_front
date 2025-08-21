@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "@/hooks/useSession";
+import { useQuery } from "@tanstack/react-query";
 import {
   Home,
   Users,
@@ -13,6 +14,7 @@ import {
   Bookmark,
   MessageCircle,
   Hash,
+  Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -29,6 +31,11 @@ const sidebarItems: SidebarItem[] = [
     icon: Home,
     label: "홈",
     href: "/",
+  },
+  {
+    icon: Search,
+    label: "검색",
+    href: "/search",
   },
   {
     icon: Users,
@@ -50,7 +57,6 @@ const sidebarItems: SidebarItem[] = [
     icon: Bell,
     label: "Notifications",
     href: "/notifications",
-    badge: 3,
     requireAuth: true,
   },
   {
@@ -83,6 +89,19 @@ export function Sidebar() {
   const pathname = usePathname();
   const { data: session } = useSession();
 
+  // Get unread notifications count
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      const { notificationsApi } = await import("@/lib/api");
+      const data = await notificationsApi.getUnreadCount();
+      return (data as any).count;
+    },
+    enabled: !!session?.isAuthenticated,
+    refetchOnWindowFocus: false,
+    refetchInterval: false,
+  });
+
   // 인증이 필요한 페이지들은 비로그인 시 숨김
   const filteredItems = sidebarItems.filter((item) => {
     if (item.requireAuth && !session?.isAuthenticated) {
@@ -114,7 +133,12 @@ export function Sidebar() {
                 >
                   <Icon className="w-5 h-5 flex-shrink-0" />
                   <span className="flex-1">{item.label}</span>
-                  {item.badge && (
+                  {item.href === "/notifications" && unreadCount > 0 && (
+                    <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full min-w-[20px] text-center">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                  {item.badge && item.href !== "/notifications" && (
                     <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full min-w-[20px] text-center">
                       {item.badge}
                     </span>
@@ -165,7 +189,12 @@ export function Sidebar() {
               >
                 <Icon className="w-5 h-5" />
                 <span className="text-xs font-medium">{item.label}</span>
-                {item.badge && (
+                {item.href === "/notifications" && unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                    {unreadCount > 99 ? "99+" : unreadCount}
+                  </span>
+                )}
+                {item.badge && item.href !== "/notifications" && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                     {item.badge}
                   </span>

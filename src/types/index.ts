@@ -138,3 +138,54 @@ export interface InputProps extends ComponentProps {
   error?: string;
   disabled?: boolean;
 }
+
+// 알림 관련 타입
+export type NotificationKind = "MENTION" | "REPLY" | "REACTION" | "FOLLOW";
+
+export interface Notification {
+  id: number;
+  userId: number;
+  kind: NotificationKind;
+  payload: any;
+  readAt: string | null;
+  createdAt: string;
+}
+
+export interface NotificationResponse {
+  notifications: Notification[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+}
+
+// 검색 관련 타입
+export interface SearchUser {
+  id: number;
+  handle: string;
+  displayName?: string;
+  bio?: string;
+  isVerified?: boolean;
+  followerCount?: number;
+  followingCount?: number;
+  avatarUrl?: string;
+}
+
+export interface SearchSymbol {
+  ticker: string;
+  name?: string;
+  kind?: string;
+  price?: number;
+  change?: number;
+  postCount?: number;
+  mentionCount?: number;
+}
+
+export interface SearchResponse {
+  results: Post[] | SearchUser[] | SearchSymbol[];
+  hasMore: boolean;
+  nextCursor?: string;
+  total: number;
+}

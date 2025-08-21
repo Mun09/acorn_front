@@ -331,5 +331,27 @@ export const usersApi = {
     apiClient.get(`/api/users/${handle}/following`),
 };
 
+export const notificationsApi = {
+  getNotifications: (queryString?: string) =>
+    apiClient.get(`/api/notifications${queryString ? `?${queryString}` : ""}`),
+
+  getUnreadCount: () => apiClient.get("/api/notifications/unread-count"),
+
+  markAsRead: (notificationId: number) =>
+    apiClient.patch(`/api/notifications/${notificationId}/mark-read`),
+
+  markAllAsRead: () => apiClient.patch("/api/notifications/mark-read"),
+};
+
+export const searchApi = {
+  search: (query: string, type?: "posts" | "people" | "symbols") => {
+    const params = new URLSearchParams({ q: query });
+    if (type) {
+      params.append("type", type);
+    }
+    return apiClient.get(`/api/search?${params.toString()}`);
+  },
+};
+
 // 기본 export
 export default apiClient;

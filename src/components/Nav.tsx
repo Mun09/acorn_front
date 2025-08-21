@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSession, useLogout } from "@/hooks/useSession";
 import { useTheme } from "next-themes";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import {
   Search,
   Bell,
@@ -24,6 +25,20 @@ export function Nav() {
   const [searchQuery, setSearchQuery] = useState("");
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+
+  // Get unread notifications count
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ["notifications", "unread-count"],
+    queryFn: async () => {
+      const { notificationsApi } = await import("@/lib/api");
+      const data = await notificationsApi.getUnreadCount();
+      return (data as any).count;
+    },
+    enabled: !!session?.user,
+    refetchOnWindowFocus: true, // 창 포커스 시 최신 데이터 가져오기
+    refetchInterval: 30 * 1000, // 30초마다 자동 갱신
+    staleTime: 10 * 1000, // 10초 동안은 fresh로 간주
+  });
 
   const handleLogout = () => {
     logout.mutate();
@@ -95,10 +110,16 @@ export function Nav() {
             ) : session?.isAuthenticated ? (
               <>
                 {/* 알림 버튼 */}
-                <button className="p-2 rounded-full hover:bg-accent relative">
-                  <Bell className="w-5 h-5" />
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-                </button>
+                <Link href="/notifications">
+                  <button className="p-2 rounded-full hover:bg-accent relative">
+                    <Bell className="w-5 h-5" />
+                    {unreadCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
+                  </button>
+                </Link>
 
                 {/* 프로필 메뉴 */}
                 <div className="relative">
