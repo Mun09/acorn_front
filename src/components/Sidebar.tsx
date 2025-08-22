@@ -16,6 +16,7 @@ import {
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { symbolsApi } from "@/lib/api";
 
 interface SidebarItem {
   icon: React.ComponentType<{ className?: string }>;
@@ -95,6 +96,16 @@ export function Sidebar() {
     refetchInterval: false,
   });
 
+  // Get popular symbols
+  const { data: popularSymbols } = useQuery({
+    queryKey: ["symbols", "popular"],
+    queryFn: async () => {
+      const data = await symbolsApi.getPopularSymbols(5);
+      return (data as any).data?.symbols || [];
+    },
+    staleTime: 5 * 60 * 1000, // 5분
+  });
+
   // 인증이 필요한 페이지들은 비로그인 시 숨김
   const filteredItems = sidebarItems.filter((item) => {
     if (item.requireAuth && !session?.isAuthenticated) {
@@ -152,6 +163,37 @@ export function Sidebar() {
               );
             })}
           </nav>
+
+          {/* 인기 심볼 섹션 */}
+          {popularSymbols && popularSymbols.length > 0 && (
+            <div className="px-4 py-3 border-t border-border">
+              <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
+                <Hash className="w-4 h-4" />
+                인기 심볼
+              </h3>
+              <div className="space-y-1">
+                {popularSymbols.slice(0, 5).map((symbol: any) => (
+                  <Link
+                    key={symbol.id}
+                    href={`/symbol/${symbol.ticker}`}
+                    className="flex items-center justify-between p-2 rounded-lg text-sm hover:bg-accent transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-foreground">
+                        ${symbol.ticker}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {symbol.kind}
+                      </span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {symbol._count?.posts || 0}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* 사이드바 하단 */}
           {session?.isAuthenticated && (

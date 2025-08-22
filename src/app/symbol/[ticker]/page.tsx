@@ -1,103 +1,77 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { PostCard } from "@/features/posts/PostCard";
 import { Button } from "@/components/ui/Button";
-import { TrendingUp, TrendingDown, Activity, ExternalLink } from "lucide-react";
+import {
+  TrendingUp,
+  TrendingDown,
+  Activity,
+  Users,
+  MessageCircle,
+} from "lucide-react";
 import Link from "next/link";
-
-// 더미 데이터 생성 함수들
-function generateSparklineData(days: number = 30): number[] {
-  const data: number[] = [];
-  let value = 100 + Math.random() * 50; // 시작 가격
-
-  for (let i = 0; i < days; i++) {
-    // 약간의 랜덤 변동 (-3% ~ +3%)
-    const change = (Math.random() - 0.5) * 0.06;
-    value = value * (1 + change);
-    data.push(value);
-  }
-
-  return data;
-}
-
-function generateSentimentData() {
-  const bullish = Math.floor(Math.random() * 100);
-  const bearish = 100 - bullish;
-  return { bullish, bearish };
-}
-
-function generateRelatedSymbols(ticker: string): string[] {
-  const allSymbols = [
-    "AAPL",
-    "GOOGL",
-    "MSFT",
-    "AMZN",
-    "TSLA",
-    "META",
-    "NVDA",
-    "NFLX",
-    "UBER",
-    "SPOT",
-  ];
-  return allSymbols
-    .filter((symbol) => symbol !== ticker)
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 5);
-}
-
-// 스파크라인 컴포넌트
-function Sparkline({
-  data,
-  className = "",
-}: {
-  data: number[];
-  className?: string;
-}) {
-  if (data.length === 0) return null;
-
-  const min = Math.min(...data);
-  const max = Math.max(...data);
-  const range = max - min;
-
-  const points = data
-    .map((value, index) => {
-      const x = (index / (data.length - 1)) * 200; // 200px 너비
-      const y = 40 - ((value - min) / range) * 40; // 40px 높이, 뒤집기
-      return `${x},${y}`;
-    })
-    .join(" ");
-
-  const isPositive = data[data.length - 1] > data[0];
-
-  return (
-    <svg
-      width="200"
-      height="40"
-      viewBox="0 0 200 40"
-      className={`${className} ${isPositive ? "text-green-500" : "text-red-500"}`}
-    >
-      <polyline
-        points={points}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        className="opacity-80"
-      />
-    </svg>
-  );
-}
+import { symbolsApi } from "@/lib/api";
 
 // 감성 분석 컴포넌트
 function SentimentMeter({
-  bullish,
-  bearish,
+  sentiment,
+  isLoading,
 }: {
-  bullish: number;
-  bearish: number;
+  sentiment?: {
+    bullishPercentage: number;
+    bearishPercentage: number;
+    confidence: number;
+    totalPosts: number;
+    totalReactions: number;
+  } | null;
+  isLoading: boolean;
 }) {
+  if (isLoading) {
+    return (
+      <div className="bg-card border border-border rounded-lg p-4">
+        <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+          <Activity className="w-4 h-4" />
+          커뮤니티 감성
+        </h3>
+        <div className="animate-pulse space-y-3">
+          <div className="h-4 bg-muted rounded w-3/4"></div>
+          <div className="h-2 bg-muted rounded"></div>
+          <div className="h-4 bg-muted rounded w-1/2"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!sentiment) {
+    return (
+      <div className="bg-card border border-border rounded-lg p-4">
+        <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
+          <Activity className="w-4 h-4" />
+          커뮤니티 감성
+        </h3>
+        <div className="text-center py-6">
+          <p className="text-muted-foreground text-sm">
+            아직 충분한 데이터가 없습니다
+          </p>
+          <p className="text-xs text-muted-foreground mt-1">
+            포스트와 반응이 더 쌓이면 감성 분석이 표시됩니다
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  const {
+    bullishPercentage,
+    bearishPercentage,
+    confidence,
+    totalPosts,
+    totalReactions,
+  } = sentiment;
+
   return (
     <div className="bg-card border border-border rounded-lg p-4">
       <h3 className="font-semibold text-foreground mb-3 flex items-center gap-2">
@@ -105,50 +79,56 @@ function SentimentMeter({
         커뮤니티 감성
       </h3>
 
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground flex items-center gap-1">
-            <TrendingUp className="w-3 h-3 text-green-500" />
-            강세
-          </span>
-          <span className="text-sm font-medium text-green-600">{bullish}%</span>
+      <div className="space-y-4">
+        {/* 감성 지표 */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground flex items-center gap-1">
+              <TrendingUp className="w-3 h-3 text-green-500" />
+              강세
+            </span>
+            <span className="text-sm font-medium text-green-600">
+              {bullishPercentage.toFixed(1)}%
+            </span>
+          </div>
+
+          <div className="w-full bg-muted rounded-full h-2">
+            <div
+              className="bg-green-500 h-2 rounded-full transition-all duration-300"
+              style={{ width: `${bullishPercentage}%` }}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground flex items-center gap-1">
+              <TrendingDown className="w-3 h-3 text-red-500" />
+              약세
+            </span>
+            <span className="text-sm font-medium text-red-600">
+              {bearishPercentage.toFixed(1)}%
+            </span>
+          </div>
         </div>
 
-        <div className="w-full bg-muted rounded-full h-2">
-          <div
-            className="bg-green-500 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${bullish}%` }}
-          />
+        {/* 신뢰도와 통계 */}
+        <div className="pt-3 border-t border-border space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-muted-foreground">신뢰도</span>
+            <span className="text-xs font-medium">
+              {(confidence * 100).toFixed(1)}%
+            </span>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <MessageCircle className="w-3 h-3" />
+              {totalPosts}개 포스트
+            </span>
+            <span className="flex items-center gap-1">
+              <Users className="w-3 h-3" />
+              {totalReactions}개 반응
+            </span>
+          </div>
         </div>
-
-        <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground flex items-center gap-1">
-            <TrendingDown className="w-3 h-3 text-red-500" />
-            약세
-          </span>
-          <span className="text-sm font-medium text-red-600">{bearish}%</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// 연관 심볼 컴포넌트
-function RelatedSymbols({ symbols }: { symbols: string[] }) {
-  return (
-    <div className="bg-card border border-border rounded-lg p-4">
-      <h3 className="font-semibold text-foreground mb-3">연관 심볼</h3>
-      <div className="space-y-2">
-        {symbols.map((symbol) => (
-          <Link
-            key={symbol}
-            href={`/symbol/${symbol}`}
-            className="flex items-center justify-between p-2 rounded hover:bg-muted transition-colors"
-          >
-            <span className="font-medium text-foreground">${symbol}</span>
-            <ExternalLink className="w-3 h-3 text-muted-foreground" />
-          </Link>
-        ))}
       </div>
     </div>
   );
@@ -190,40 +170,26 @@ export default function SymbolPage() {
   const ticker = (params.ticker as string)?.toUpperCase();
 
   const [activeTab, setActiveTab] = useState<"latest" | "hot">("latest");
-  const [sparklineData, setSparklineData] = useState<number[]>([]);
-  const [sentiment, setSentiment] = useState({ bullish: 50, bearish: 50 });
-  const [relatedSymbols, setRelatedSymbols] = useState<string[]>([]);
-  const [symbolExists, setSymbolExists] = useState(true);
 
-  // 더미 데이터 생성
-  useEffect(() => {
-    if (!ticker) return;
+  // 심볼 정보 조회
+  const {
+    data: symbolData,
+    isLoading: symbolLoading,
+    isError: symbolError,
+  } = useQuery({
+    queryKey: ["symbol", ticker],
+    queryFn: () => symbolsApi.getSymbol(ticker!),
+    enabled: !!ticker,
+  });
 
-    // 일부 티커만 유효한 것으로 처리 (실제로는 API에서 확인)
-    const validTickers = [
-      "AAPL",
-      "GOOGL",
-      "MSFT",
-      "AMZN",
-      "TSLA",
-      "META",
-      "NVDA",
-      "NFLX",
-      "UBER",
-      "SPOT",
-    ];
-    const exists = validTickers.includes(ticker);
+  // 감성 분석 데이터 조회
+  const { data: sentimentData, isLoading: sentimentLoading } = useQuery({
+    queryKey: ["symbol-sentiment", ticker],
+    queryFn: () => symbolsApi.getSymbolSentiment(ticker!),
+    enabled: !!ticker && !!symbolData,
+  });
 
-    setSymbolExists(exists);
-
-    if (exists) {
-      setSparklineData(generateSparklineData());
-      setSentiment(generateSentimentData());
-      setRelatedSymbols(generateRelatedSymbols(ticker));
-    }
-  }, [ticker]);
-
-  // 심볼 포스트 데이터 가져오기 (더미 구현)
+  // 심볼 포스트 데이터 가져오기
   const {
     data,
     fetchNextPage,
@@ -235,71 +201,58 @@ export default function SymbolPage() {
   } = useInfiniteQuery({
     queryKey: ["symbol-posts", ticker, activeTab],
     queryFn: async ({ pageParam = undefined }) => {
-      // 실제로는 API 호출: /symbols/${ticker}/posts?sort=${activeTab}
-      // 또는 /search?q=$${ticker}
-
-      // 더미 응답
-      await new Promise((resolve) => setTimeout(resolve, 500));
-
-      const dummyPosts = Array.from({ length: 10 }, (_, i) => ({
-        id: `${ticker}-${activeTab}-${pageParam || 0}-${i}`,
-        content: `${ticker}에 대한 ${activeTab === "hot" ? "인기" : "최신"} 포스트 ${i + 1}. 오늘 ${ticker} 움직임이 흥미롭네요! 📈`,
-        createdAt: new Date(
-          Date.now() - Math.random() * 24 * 60 * 60 * 1000
-        ).toISOString(),
-        user: {
-          id: i + 1,
-          handle: `trader${i + 1}`,
-          displayName: `트레이더 ${i + 1}`,
-          avatarUrl: null,
-          isVerified: Math.random() > 0.7,
-        },
-        mediaItems: [],
-        symbols: [{ ticker, kind: "STOCK" }],
-        reactionCounts: {
-          likes: Math.floor(Math.random() * 50),
-          replies: Math.floor(Math.random() * 20),
-          boosts: Math.floor(Math.random() * 10),
-          bookmarks: Math.floor(Math.random() * 15),
-        },
-        userReaction: null,
-      }));
-
-      return {
-        data: {
-          posts: dummyPosts,
-          nextCursor: Math.random() > 0.3 ? `cursor-${Date.now()}` : null,
-        },
-      };
+      const params = new URLSearchParams({
+        sort: activeTab,
+        limit: "20",
+      });
+      if (pageParam) {
+        params.append("cursor", pageParam);
+      }
+      return symbolsApi.getSymbolPosts(ticker!, params.toString());
     },
-    getNextPageParam: (lastPage: any) => lastPage.data?.nextCursor || undefined,
+    getNextPageParam: (lastPage: any) => {
+      return lastPage.data?.nextCursor || undefined;
+    },
     initialPageParam: undefined,
-    enabled: symbolExists && !!ticker,
+    enabled: !!ticker && !!symbolData,
   });
 
   // 모든 포스트 플래튼화
-  const posts =
-    data?.pages.flatMap((page: any) => page.data?.posts || []) || [];
+  const posts = useMemo(
+    () => data?.pages.flatMap((page: any) => page.data?.posts || []) || [],
+    [data]
+  );
+
+  // 감성 데이터 메모화
+  const processedSentimentData = useMemo(() => {
+    return (sentimentData as any)?.data || null;
+  }, [sentimentData]);
 
   if (!ticker) {
     return <SymbolNotFound ticker="UNKNOWN" />;
   }
 
-  if (!symbolExists) {
+  if (symbolError) {
     return <SymbolNotFound ticker={ticker} />;
   }
 
-  const isPositive =
-    sparklineData.length > 0 &&
-    sparklineData[sparklineData.length - 1] > sparklineData[0];
-  const priceChange =
-    sparklineData.length > 0
-      ? (
-          ((sparklineData[sparklineData.length - 1] - sparklineData[0]) /
-            sparklineData[0]) *
-          100
-        ).toFixed(2)
-      : "0";
+  if (symbolLoading) {
+    return (
+      <div className="max-w-6xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          <div className="lg:col-span-3 space-y-6">
+            <div className="bg-card border border-border rounded-lg p-6">
+              <div className="animate-pulse">
+                <div className="h-8 bg-muted rounded w-32 mb-2"></div>
+                <div className="h-4 bg-muted rounded w-48 mb-4"></div>
+                <div className="h-6 bg-muted rounded w-24"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -311,25 +264,56 @@ export default function SymbolPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <h1 className="text-3xl font-bold text-foreground">
-                  ${ticker}
+                  ${(symbolData as any)?.data?.symbol?.ticker || ticker}
                 </h1>
-                <p className="text-muted-foreground">NASDAQ • 기술주</p>
+                <p className="text-muted-foreground">
+                  {(symbolData as any)?.data?.symbol?.name ||
+                    (symbolData as any)?.data?.symbol?.exchange ||
+                    "GLOBAL"}{" "}
+                  • {(symbolData as any)?.data?.symbol?.kind || "STOCK"}
+                </p>
                 <div className="flex items-center gap-2 mt-2">
-                  <span
-                    className={`text-lg font-semibold ${isPositive ? "text-green-600" : "text-red-600"}`}
-                  >
-                    {isPositive ? "+" : ""}
-                    {priceChange}%
-                  </span>
-                  <span className="text-sm text-muted-foreground">오늘</span>
+                  {(symbolData as any)?.data?.symbol?._count?.posts && (
+                    <span className="text-sm text-muted-foreground">
+                      {(symbolData as any).data.symbol._count.posts}개 포스트
+                    </span>
+                  )}
+                  {(symbolData as any)?.data?.symbol?.sector && (
+                    <span className="text-sm text-muted-foreground">
+                      • {(symbolData as any).data.symbol.sector}
+                    </span>
+                  )}
                 </div>
               </div>
 
+              {/* 감성 요약 */}
               <div className="flex flex-col items-end">
-                <div className="mb-2">
-                  <Sparkline data={sparklineData} />
-                </div>
-                <span className="text-xs text-muted-foreground">30일 추이</span>
+                {processedSentimentData && (
+                  <div className="text-right">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm text-muted-foreground">
+                        커뮤니티 감성:
+                      </span>
+                      <span
+                        className={`text-lg font-semibold ${
+                          processedSentimentData.bullishPercentage >
+                          processedSentimentData.bearishPercentage
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }`}
+                      >
+                        {processedSentimentData.bullishPercentage >
+                        processedSentimentData.bearishPercentage
+                          ? "강세"
+                          : "약세"}
+                      </span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      신뢰도:{" "}
+                      {(processedSentimentData.confidence * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -437,10 +421,9 @@ export default function SymbolPage() {
         {/* 사이드바 */}
         <div className="space-y-6">
           <SentimentMeter
-            bullish={sentiment.bullish}
-            bearish={sentiment.bearish}
+            sentiment={processedSentimentData}
+            isLoading={sentimentLoading}
           />
-          <RelatedSymbols symbols={relatedSymbols} />
         </div>
       </div>
     </div>

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ImagePlus, X, AlertCircle } from "lucide-react";
+import { ImagePlus, X, AlertCircle, Hash } from "lucide-react";
 import { postsApi } from "@/lib/api";
 import {
   parseRichText,
@@ -12,6 +12,22 @@ import {
 import { Button } from "@/components/ui/Button";
 import { MediaItem } from "@/types";
 import { cn } from "@/lib/utils";
+
+// 심볼 추출 함수
+function extractSymbols(text: string): string[] {
+  const symbolRegex = /\#([A-Z]{1,10})\b/g;
+  const symbols: string[] = [];
+  let match;
+
+  while ((match = symbolRegex.exec(text)) !== null) {
+    const symbol = match[1];
+    if (!symbols.includes(symbol)) {
+      symbols.push(symbol);
+    }
+  }
+
+  return symbols;
+}
 
 interface PostComposerProps {
   className?: string;
@@ -33,6 +49,9 @@ export function PostComposer({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const queryClient = useQueryClient();
+
+  // 텍스트에서 심볼 추출
+  const extractedSymbols = useMemo(() => extractSymbols(text), [text]);
 
   // 포스트 생성 뮤테이션
   const createPostMutation = useMutation({
@@ -242,14 +261,34 @@ export function PostComposer({
         )}
 
         {/* 파싱된 요소 미리보기 */}
-        {(cashTags.length > 0 || mentions.length > 0) && (
-          <div className="text-sm text-muted-foreground">
+        {(cashTags.length > 0 ||
+          mentions.length > 0 ||
+          extractedSymbols.length > 0) && (
+          <div className="text-sm text-muted-foreground space-y-1">
             {cashTags.length > 0 && (
               <div>캐시태그: {cashTags.map((tag) => `$${tag}`).join(", ")}</div>
             )}
             {mentions.length > 0 && (
               <div>
                 멘션: {mentions.map((mention) => `@${mention}`).join(", ")}
+              </div>
+            )}
+            {extractedSymbols.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="flex items-center gap-1">
+                  <Hash className="w-3 h-3" />
+                  심볼:
+                </span>
+                <div className="flex gap-1 flex-wrap">
+                  {extractedSymbols.map((symbol) => (
+                    <span
+                      key={symbol}
+                      className="px-2 py-1 bg-primary/10 text-primary rounded text-xs font-medium"
+                    >
+                      #{symbol}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
           </div>

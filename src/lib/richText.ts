@@ -3,10 +3,11 @@
  */
 
 export interface ParsedToken {
-  type: "text" | "hashtag" | "mention";
+  type: "text" | "hashtag" | "mention" | "symbol";
   content: string;
   symbol?: string; // 캐시태그의 경우 심볼 ($TSLA -> TSLA)
   handle?: string; // 멘션의 경우 핸들 (@user -> user)
+  ticker?: string; // 심볼의 경우 티커 (#AAPL -> AAPL)
 }
 
 // 캐시태그 정규식: $ABC, $ABC.DE 등
@@ -14,6 +15,9 @@ const HASHTAG_REGEX = /\$([A-Z]{1,5}(?:\.[A-Z]{1,3})?)/g;
 
 // 멘션 정규식: @username (영문, 숫자, 언더스코어)
 const MENTION_REGEX = /@([a-zA-Z0-9_]{3,20})/g;
+
+// 심볼 정규식: #ABC, #AAPL 등
+const SYMBOL_REGEX = /\#([A-Z]{1,10})/g;
 
 /**
  * 텍스트를 파싱하여 일반 텍스트, 캐시태그, 멘션으로 분리
@@ -24,12 +28,13 @@ export function parseRichText(text: string): ParsedToken[] {
 
   // 모든 매치를 찾아서 위치순으로 정렬
   const matches: Array<{
-    type: "hashtag" | "mention";
+    type: "hashtag" | "mention" | "symbol";
     index: number;
     length: number;
     content: string;
     symbol?: string;
     handle?: string;
+    ticker?: string;
   }> = [];
 
   // 캐시태그 매치
@@ -56,6 +61,18 @@ export function parseRichText(text: string): ParsedToken[] {
     });
   }
 
+  // 심볼 매치
+  SYMBOL_REGEX.lastIndex = 0; // 정규식 인덱스 리셋
+  while ((match = SYMBOL_REGEX.exec(text)) !== null) {
+    matches.push({
+      type: "symbol",
+      index: match.index,
+      length: match[0].length,
+      content: match[0],
+      ticker: match[1],
+    });
+  }
+
   // 인덱스순으로 정렬
   matches.sort((a, b) => a.index - b.index);
 
@@ -78,6 +95,7 @@ export function parseRichText(text: string): ParsedToken[] {
       content: matchItem.content,
       symbol: matchItem.symbol,
       handle: matchItem.handle,
+      ticker: matchItem.ticker,
     });
 
     lastIndex = matchItem.index + matchItem.length;
@@ -119,4 +137,12 @@ export function extractCashTags(text: string): string[] {
 export function extractMentions(text: string): string[] {
   const matches = text.match(MENTION_REGEX);
   return matches ? matches.map((match) => match.slice(1)) : []; // @ 제거
+}
+
+/**
+ * 텍스트에서 심볼 추출
+ */
+export function extractSymbols(text: string): string[] {
+  const matches = text.match(SYMBOL_REGEX);
+  return matches ? matches.map((match) => match.slice(1)) : []; // # 제거
 }

@@ -418,5 +418,38 @@ export const searchApi = {
   },
 };
 
+export const symbolsApi = {
+  getSymbol: (ticker: string) => apiClient.get(`/api/symbols/${ticker}`),
+
+  getSymbolPosts: (ticker: string, queryString?: string) =>
+    apiClient.get(
+      `/api/symbols/${ticker}/posts${queryString ? `?${queryString}` : ""}`
+    ),
+
+  getSymbolFeed: (queryString?: string) =>
+    apiClient.get(`/api/symbols/feed${queryString ? `?${queryString}` : ""}`),
+
+  searchSymbols: (options?: {
+    query?: string;
+    limit?: number;
+    cursor?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.query) params.append("query", options.query);
+    if (options?.limit) params.append("limit", options.limit.toString());
+    if (options?.cursor) params.append("cursor", options.cursor);
+    return apiClient.get(`/api/symbols/search?${params.toString()}`);
+  },
+
+  getPopularSymbols: (limit?: number) => {
+    const params = new URLSearchParams();
+    if (limit) params.append("limit", limit.toString());
+    return apiClient.get(`/api/symbols?${params.toString()}`);
+  },
+
+  getSymbolSentiment: (ticker: string) =>
+    apiClient.get(`/api/symbols/${ticker}/sentiment`),
+};
+
 // 기본 export
 export default apiClient;

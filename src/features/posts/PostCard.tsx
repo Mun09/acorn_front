@@ -185,6 +185,16 @@ export function PostCard({ post, className }: PostCardProps) {
             {token.content}
           </Link>
         );
+      } else if (token.type === "symbol") {
+        return (
+          <Link
+            key={index}
+            href={`/symbol/${token.ticker}`}
+            className="text-primary hover:text-primary/80 font-medium"
+          >
+            {token.content}
+          </Link>
+        );
       } else {
         return <span key={index}>{token.content}</span>;
       }
