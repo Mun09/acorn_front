@@ -1,6 +1,7 @@
 "use client";
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { z } from "zod";
 
 // 백엔드 응답과 일치하는 User 스키마
@@ -78,6 +79,29 @@ export function useSession() {
     refetchOnMount: true,
     refetchOnReconnect: false,
   });
+
+  // 주기적 토큰 갱신 (30분마다)
+  useEffect(() => {
+    if (!query.data?.isAuthenticated) return;
+
+    const refreshInterval = setInterval(
+      async () => {
+        try {
+          console.log("🔄 Attempting token refresh...");
+          await fetch("/api/session/refresh", {
+            method: "POST",
+            credentials: "include",
+          });
+          console.log("✅ Token refreshed successfully");
+        } catch (error) {
+          console.error("❌ Token refresh failed:", error);
+        }
+      },
+      30 * 60 * 1000
+    ); // 30분
+
+    return () => clearInterval(refreshInterval);
+  }, [query.data?.isAuthenticated]);
 
   console.log("🔄 useSession query state:", {
     data: query.data,

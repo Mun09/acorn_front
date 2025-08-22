@@ -26,6 +26,31 @@ export function PostCard({ post, className }: PostCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const queryClient = useQueryClient();
 
+  // 백엔드 응답 구조에 맞게 데이터 변환
+  const postMedia = post.media || [];
+  const postText = post.text || ""; // 백엔드에서 text로 반환
+  const symbols = post.symbols || [];
+
+  // author를 user로 매핑 (PostCard 컴포넌트가 user를 기대함)
+  const user = post.user || {
+    id: post.author?.id || 0,
+    handle: post.author?.handle || "",
+    displayName: post.author?.handle || "",
+    email: "",
+  };
+
+  // 백엔드 reactionCounts를 _count 형태로 변환
+  const reactionCounts = post.reactionCounts || {};
+  const _count = {
+    likes: reactionCounts.LIKE || 0,
+    boosts: reactionCounts.BOOST || 0,
+    bookmarks: reactionCounts.BOOKMARK || 0,
+    replies: 0, // replies는 별도 처리 필요
+  };
+
+  // 현재는 사용자별 반응 상태를 알 수 없으므로 기본값
+  const userReactions: string[] = [];
+
   // 리액션 뮤테이션 (낙관적 업데이트 포함)
   const reactMutation = useMutation({
     mutationFn: ({
@@ -63,20 +88,30 @@ export function PostCard({ post, className }: PostCardProps) {
               posts:
                 page.data?.posts?.map((p: Post) => {
                   if (p.id === post.id) {
-                    const currentReactions = p.userReactions || [];
-                    const currentCounts = p.reactionCounts || {};
+                    // 백엔드 응답 구조에서는 낙관적 업데이트를 단순화
+                    // reactionCounts를 직접 업데이트
+                    const updatedReactionCounts = { ...p.reactionCounts };
+
+                    if (type === "LIKE") {
+                      updatedReactionCounts.LIKE = isReacting
+                        ? (updatedReactionCounts.LIKE || 0) + 1
+                        : Math.max(0, (updatedReactionCounts.LIKE || 0) - 1);
+                    } else if (type === "BOOST") {
+                      updatedReactionCounts.BOOST = isReacting
+                        ? (updatedReactionCounts.BOOST || 0) + 1
+                        : Math.max(0, (updatedReactionCounts.BOOST || 0) - 1);
+                    } else if (type === "BOOKMARK") {
+                      updatedReactionCounts.BOOKMARK = isReacting
+                        ? (updatedReactionCounts.BOOKMARK || 0) + 1
+                        : Math.max(
+                            0,
+                            (updatedReactionCounts.BOOKMARK || 0) - 1
+                          );
+                    }
 
                     return {
                       ...p,
-                      userReactions: isReacting
-                        ? [...currentReactions, type]
-                        : currentReactions.filter((r) => r !== type),
-                      reactionCounts: {
-                        ...currentCounts,
-                        [type]: isReacting
-                          ? (currentCounts[type] || 0) + 1
-                          : Math.max(0, (currentCounts[type] || 0) - 1),
-                      },
+                      reactionCounts: updatedReactionCounts,
                     };
                   }
                   return p;
@@ -113,18 +148,18 @@ export function PostCard({ post, className }: PostCardProps) {
   });
 
   const handleReaction = (type: "LIKE" | "BOOKMARK" | "BOOST") => {
-    const isReacting = !post.userReactions?.includes(type);
+    const isReacting = !userReactions?.includes(type);
     reactMutation.mutate({ type, isReacting });
   };
 
   // 텍스트 파싱
-  const tokens = parseRichText(post.text);
+  const tokens = parseRichText(postText);
 
   // 미디어 파싱 (JSON string → array)
-  const media: MediaItem[] = post.media
-    ? typeof post.media === "string"
-      ? JSON.parse(post.media)
-      : post.media
+  const mediaItems: MediaItem[] = postMedia
+    ? typeof postMedia === "string"
+      ? JSON.parse(postMedia)
+      : postMedia
     : [];
 
   // 텍스트 렌더링
@@ -188,10 +223,10 @@ export function PostCard({ post, className }: PostCardProps) {
     >
       <div className="flex space-x-3">
         {/* 사용자 아바타 */}
-        <Link href={`/users/${post.user.handle}`} className="flex-shrink-0">
+        <Link href={`/users/${user.handle}`} className="flex-shrink-0">
           <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
             <span className="text-primary-foreground font-medium">
-              {post.user.handle[0].toUpperCase()}
+              {user.handle[0].toUpperCase()}
             </span>
           </div>
         </Link>
@@ -201,10 +236,10 @@ export function PostCard({ post, className }: PostCardProps) {
           {/* 헤더 */}
           <div className="flex items-center space-x-2 mb-2">
             <Link
-              href={`/users/${post.user.handle}`}
+              href={`/users/${user.handle}`}
               className="font-semibold text-foreground hover:underline"
             >
-              @{post.user.handle}
+              @{user.handle}
             </Link>
             <span className="text-muted-foreground text-sm">·</span>
             <time
@@ -226,20 +261,20 @@ export function PostCard({ post, className }: PostCardProps) {
           </div>
 
           {/* 미디어 */}
-          {media.length > 0 && (
+          {mediaItems.length > 0 && (
             <div
               className={cn(
                 "grid gap-2 mb-3 rounded-lg overflow-hidden",
-                getMediaGridClass(media.length)
+                getMediaGridClass(mediaItems.length)
               )}
             >
-              {media.slice(0, 4).map((item, index) => (
+              {mediaItems.slice(0, 4).map((item: MediaItem, index: number) => (
                 <div
                   key={index}
                   className={cn(
                     "relative bg-muted",
-                    media.length === 3 && index === 0 ? "row-span-2" : "",
-                    media.length === 3 && index > 0
+                    mediaItems.length === 3 && index === 0 ? "row-span-2" : "",
+                    mediaItems.length === 3 && index > 0
                       ? "aspect-square"
                       : "aspect-video"
                   )}
@@ -259,10 +294,10 @@ export function PostCard({ post, className }: PostCardProps) {
                       preload="metadata"
                     />
                   )}
-                  {media.length > 4 && index === 3 && (
+                  {mediaItems.length > 4 && index === 3 && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                       <span className="text-white font-medium">
-                        +{media.length - 4}
+                        +{mediaItems.length - 4}
                       </span>
                     </div>
                   )}
@@ -279,18 +314,18 @@ export function PostCard({ post, className }: PostCardProps) {
               disabled={reactMutation.isPending}
               className={cn(
                 "flex items-center space-x-2 hover:text-red-500 transition-colors group",
-                post.userReactions?.includes("LIKE") && "text-red-500"
+                userReactions?.includes("LIKE") && "text-red-500"
               )}
             >
               <div className="p-2 rounded-full group-hover:bg-red-500/10">
                 <Heart
                   className={cn(
                     "w-4 h-4",
-                    post.userReactions?.includes("LIKE") && "fill-current"
+                    userReactions?.includes("LIKE") && "fill-current"
                   )}
                 />
               </div>
-              <span className="text-sm">{post.reactionCounts?.LIKE || 0}</span>
+              <span className="text-sm">{reactionCounts?.LIKE || 0}</span>
             </button>
 
             {/* 댓글 */}
@@ -310,13 +345,13 @@ export function PostCard({ post, className }: PostCardProps) {
               disabled={reactMutation.isPending}
               className={cn(
                 "flex items-center space-x-2 hover:text-green-500 transition-colors group",
-                post.userReactions?.includes("BOOST") && "text-green-500"
+                userReactions?.includes("BOOST") && "text-green-500"
               )}
             >
               <div className="p-2 rounded-full group-hover:bg-green-500/10">
                 <Repeat className="w-4 h-4" />
               </div>
-              <span className="text-sm">{post.reactionCounts?.BOOST || 0}</span>
+              <span className="text-sm">{reactionCounts?.BOOST || 0}</span>
             </button>
 
             {/* 북마크 */}
@@ -325,14 +360,14 @@ export function PostCard({ post, className }: PostCardProps) {
               disabled={reactMutation.isPending}
               className={cn(
                 "flex items-center space-x-2 hover:text-blue-500 transition-colors group",
-                post.userReactions?.includes("BOOKMARK") && "text-blue-500"
+                userReactions?.includes("BOOKMARK") && "text-blue-500"
               )}
             >
               <div className="p-2 rounded-full group-hover:bg-blue-500/10">
                 <Bookmark
                   className={cn(
                     "w-4 h-4",
-                    post.userReactions?.includes("BOOKMARK") && "fill-current"
+                    userReactions?.includes("BOOKMARK") && "fill-current"
                   )}
                 />
               </div>

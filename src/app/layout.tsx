@@ -3,7 +3,6 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers/Providers";
 import { Sidebar } from "@/components/Sidebar";
-import { Nav } from "@/components/Nav";
 
 // 폰트 설정
 const inter = Inter({ subsets: ["latin"] });
@@ -48,15 +47,12 @@ export default function RootLayout({
       <body className={inter.className}>
         <Providers>
           <div className="min-h-screen bg-background">
-            {/* 상단 네비게이션 */}
-            <Nav />
-
             <div className="flex">
               {/* 좌측 사이드바 */}
               <Sidebar />
 
               {/* 메인 컨텐츠 */}
-              <main className="flex-1 min-h-screen pt-16 lg:pl-64">
+              <main className="flex-1 min-h-screen lg:pl-64">
                 <div className="container mx-auto px-4 py-6">{children}</div>
               </main>
             </div>

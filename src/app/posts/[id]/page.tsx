@@ -10,11 +10,9 @@ import {
 } from "@tanstack/react-query";
 import { PostCard } from "@/features/posts/PostCard";
 import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
 import { MessageCircle, Send, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "@/hooks/useSession";
-import { postsApi } from "@/lib/api";
 
 // 댓글 컴포넌트
 function ReplyCard({ reply }: { reply: any }) {

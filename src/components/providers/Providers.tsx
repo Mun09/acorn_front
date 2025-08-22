@@ -83,17 +83,30 @@ export function Providers({ children }: ProvidersProps) {
             staleTime: 1000 * 60 * 5, // 5분
             gcTime: 1000 * 60 * 30, // 30분 (구 cacheTime)
             retry: (failureCount, error: any) => {
-              // 401, 403, 404는 재시도하지 않음
-              if (error?.status && [401, 403, 404].includes(error.status)) {
+              // 401 에러는 토큰 갱신 후 재시도할 수 있으므로 한 번 더 시도
+              if (error?.status === 401 && failureCount === 0) {
+                return true;
+              }
+              // 403, 404는 재시도하지 않음
+              if (error?.status && [403, 404].includes(error.status)) {
                 return false;
               }
               return failureCount < 3;
             },
+            retryDelay: (attemptIndex) =>
+              Math.min(1000 * 2 ** attemptIndex, 30000),
             refetchOnWindowFocus: false, // 윈도우 포커스 시 자동 리페치 비활성화
           },
           mutations: {
             // 뮤테이션 기본 옵션
-            retry: false,
+            retry: (failureCount, error: any) => {
+              // 401 에러는 토큰 갱신 후 재시도할 수 있으므로 한 번 더 시도
+              if (error?.status === 401 && failureCount === 0) {
+                return true;
+              }
+              return false;
+            },
+            retryDelay: 1000,
           },
         },
       })

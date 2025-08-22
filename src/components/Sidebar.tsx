@@ -6,7 +6,6 @@ import { useSession } from "@/hooks/useSession";
 import { useQuery } from "@tanstack/react-query";
 import {
   Home,
-  Users,
   TrendingUp,
   Bell,
   User,
@@ -36,12 +35,6 @@ const sidebarItems: SidebarItem[] = [
     icon: Search,
     label: "검색",
     href: "/search",
-  },
-  {
-    icon: Users,
-    label: "Following",
-    href: "/following",
-    requireAuth: true,
   },
   {
     icon: Hash,
@@ -113,8 +106,20 @@ export function Sidebar() {
   return (
     <>
       {/* 데스크톱 사이드바 */}
-      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-64 lg:pt-16">
+      <aside className="hidden lg:flex lg:flex-col lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-64">
         <div className="flex flex-col h-full bg-background border-r border-border">
+          {/* 로고 영역 */}
+          <div className="flex items-center justify-center h-16 px-4 border-b border-border">
+            <Link href="/" className="flex items-center space-x-2">
+              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+                <span className="text-primary-foreground font-bold text-lg">
+                  A
+                </span>
+              </div>
+              <span className="text-xl font-bold text-foreground">Acorn</span>
+            </Link>
+          </div>
+
           <nav className="flex-1 px-4 py-6 space-y-2">
             {filteredItems.map((item) => {
               const Icon = item.icon;

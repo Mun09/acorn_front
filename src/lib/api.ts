@@ -65,6 +65,11 @@ export const tokenManager = {
 export class ApiFetch {
   private baseURL: string;
   private onUnauthorized?: () => void;
+  private isRefreshing = false;
+  private failedQueue: Array<{
+    resolve: (value: any) => void;
+    reject: (error: any) => void;
+  }> = [];
 
   constructor(baseURL: string) {
     this.baseURL = baseURL;
@@ -73,6 +78,53 @@ export class ApiFetch {
   // 인증 실패 시 콜백 설정
   setUnauthorizedHandler(handler: () => void): void {
     this.onUnauthorized = handler;
+  }
+
+  // 토큰 갱신 처리
+  private async refreshToken(): Promise<boolean> {
+    if (this.isRefreshing) {
+      return new Promise((resolve, reject) => {
+        this.failedQueue.push({ resolve, reject });
+      });
+    }
+
+    this.isRefreshing = true;
+
+    try {
+      const response = await fetch("/api/session/refresh", {
+        method: "POST",
+        credentials: "include",
+      });
+
+      if (response.ok) {
+        this.processQueue(null, true);
+        return true;
+      } else {
+        this.processQueue(
+          new ApiError(401, "TOKEN_REFRESH_FAILED", "토큰 갱신 실패"),
+          false
+        );
+        return false;
+      }
+    } catch (error) {
+      this.processQueue(error, false);
+      return false;
+    } finally {
+      this.isRefreshing = false;
+    }
+  }
+
+  // 큐에 있는 요청들 처리
+  private processQueue(error: any, success: boolean): void {
+    this.failedQueue.forEach(({ resolve, reject }) => {
+      if (success) {
+        resolve(success);
+      } else {
+        reject(error);
+      }
+    });
+
+    this.failedQueue = [];
   }
 
   // 기본 fetch 옵션 생성
@@ -96,19 +148,30 @@ export class ApiFetch {
   }
 
   // 응답 처리
-  private async handleResponse<T>(response: Response): Promise<T> {
-    // 401 Unauthorized 처리
-    if (response.status === 401) {
+  private async handleResponse<T>(
+    response: Response,
+    originalRequest?: () => Promise<Response>
+  ): Promise<T> {
+    // 401 Unauthorized 처리 - 토큰 갱신 시도
+    if (response.status === 401 && originalRequest) {
       if (isDevelopment) {
-        logger.warn("API 401 Unauthorized - 토큰 삭제 및 리다이렉트");
+        logger.warn("API 401 Unauthorized - 토큰 갱신 시도");
       }
 
+      const refreshSuccess = await this.refreshToken();
+
+      if (refreshSuccess && originalRequest) {
+        // 토큰 갱신 성공 시 원래 요청 재시도
+        const retryResponse = await originalRequest();
+        return this.handleResponse(retryResponse);
+      }
+
+      // 토큰 갱신 실패 시 기존 로직 실행
       tokenManager.clearToken();
 
       if (this.onUnauthorized) {
         this.onUnauthorized();
       } else if (typeof window !== "undefined") {
-        // 홈페이지에서는 자동 리다이렉트하지 않음
         const currentPath = window.location.pathname;
         if (currentPath !== "/" && currentPath !== "/home") {
           window.location.href = "/login";
@@ -147,8 +210,9 @@ export class ApiFetch {
       logger.info("GET", url);
     }
 
-    const response = await fetch(url, options);
-    const data = await this.handleResponse<T>(response);
+    const makeRequest = () => fetch(url, options);
+    const response = await makeRequest();
+    const data = await this.handleResponse<T>(response, makeRequest);
 
     // Zod 스키마 검증
     if (schema) {
@@ -174,8 +238,9 @@ export class ApiFetch {
       logger.info("POST", url, body);
     }
 
-    const response = await fetch(url, options);
-    const data = await this.handleResponse<T>(response);
+    const makeRequest = () => fetch(url, options);
+    const response = await makeRequest();
+    const data = await this.handleResponse<T>(response, makeRequest);
 
     // Zod 스키마 검증
     if (schema) {

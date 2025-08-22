@@ -1,13 +1,14 @@
 "use client";
 
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSession } from "@/hooks/useSession";
 import { postsApi } from "@/lib/api";
 import { PostCard } from "@/features/posts/PostCard";
 import { PostComposer } from "@/features/posts/PostComposer";
 import { Button } from "@/components/ui/Button";
+import { cn } from "@/lib/utils";
 
 // 간단한 Intersection Observer 훅
 function useIntersectionObserver(callback: () => void, deps: any[]) {
@@ -41,10 +42,11 @@ export default function HomePage() {
     isError: sessionIsError,
   } = useSession();
   const queryClient = useQueryClient();
+  const [feedMode, setFeedMode] = useState<"for_you" | "following">("for_you");
 
   const isAuthenticated = session?.isAuthenticated === true;
 
-  // For You 피드 데이터 가져오기 (로그인된 사용자만)
+  // 피드 데이터 가져오기 (로그인된 사용자만)
   const {
     data,
     fetchNextPage,
@@ -55,15 +57,16 @@ export default function HomePage() {
     error,
     refetch,
   } = useInfiniteQuery({
-    queryKey: ["posts", "for_you"],
+    queryKey: ["posts", feedMode],
     queryFn: async ({ pageParam = undefined }) => {
       const params = new URLSearchParams({
-        mode: "for_you",
+        mode: feedMode,
         limit: "20",
       });
       if (pageParam) {
         params.append("cursor", pageParam);
       }
+      console.log(params.toString());
       return postsApi.getFeed(params.toString());
     },
     getNextPageParam: (lastPage: any) => {
@@ -82,12 +85,20 @@ export default function HomePage() {
 
   // 포스트 작성 성공 시 피드 새로고침
   const handlePostSuccess = () => {
-    queryClient.invalidateQueries({ queryKey: ["posts", "for_you"] });
+    queryClient.invalidateQueries({ queryKey: ["posts", feedMode] });
+  };
+
+  // 피드 모드 변경 시 피드 새로고침
+  const handleFeedModeChange = (mode: "for_you" | "following") => {
+    setFeedMode(mode);
   };
 
   // 모든 포스트 플래튼화
   const posts =
-    data?.pages.flatMap((page: any) => page.data?.posts || []) || [];
+    data?.pages.flatMap((page: any) => {
+      // 백엔드 응답 구조: { success: true, data: { posts: [...], nextCursor: "..." } }
+      return page.data?.posts || page.posts || [];
+    }) || [];
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -155,6 +166,34 @@ export default function HomePage() {
           {/* 포스트 작성기 */}
           <div className="mb-6">
             <PostComposer onSuccess={handlePostSuccess} />
+          </div>
+
+          {/* 피드 탭 */}
+          <div className="border-b border-border mb-6">
+            <div className="flex justify-center space-x-8">
+              <button
+                onClick={() => handleFeedModeChange("for_you")}
+                className={cn(
+                  "pb-3 px-1 text-sm font-medium border-b-2 transition-colors",
+                  feedMode === "for_you"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                )}
+              >
+                For You
+              </button>
+              <button
+                onClick={() => handleFeedModeChange("following")}
+                className={cn(
+                  "pb-3 px-1 text-sm font-medium border-b-2 transition-colors",
+                  feedMode === "following"
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground"
+                )}
+              >
+                Following
+              </button>
+            </div>
           </div>
 
           {/* 새로고침 버튼 */}

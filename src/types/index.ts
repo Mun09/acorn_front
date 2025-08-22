@@ -59,22 +59,52 @@ export interface PostSymbol {
 export interface Post {
   id: number;
   userId: number;
-  text: string;
+  text: string; // 백엔드에서 'text'로 반환
   media?: MediaItem[] | null;
   createdAt: string;
   replyTo?: number;
   quotePostId?: number;
-  isHidden: boolean;
-  user: User;
-  symbols?: PostSymbol[];
-  reactions?: Reaction[];
-  replies?: Post[];
+  isHidden?: boolean;
+  author: {
+    id: number;
+    handle: string;
+    bio?: string;
+    trustScore?: number;
+    verifiedFlags?: any;
+  };
+  symbols?: Array<{
+    raw: string;
+    ticker: string;
+    kind: string;
+    exchange?: string;
+  }>;
+  reactionCounts?: {
+    LIKE?: number;
+    BOOST?: number;
+    BOOKMARK?: number;
+  };
+  score?: number;
+  scoreBreakdown?: any;
+  isFollowing?: boolean;
+  // 호환성을 위한 추가 필드들 (PostCard에서 사용)
+  user?: {
+    id: number;
+    handle: string;
+    displayName?: string;
+    email?: string;
+  };
   _count?: {
-    reactions: number;
+    likes: number;
+    boosts: number;
+    bookmarks: number;
     replies: number;
   };
-  reactionCounts?: Record<string, number>;
-  userReactions?: string[]; // 현재 사용자가 한 리액션 타입들
+  isLiked?: boolean;
+  isBoosted?: boolean;
+  isBookmarked?: boolean;
+  reactions?: Reaction[];
+  replies?: Post[];
+  userReactions?: string[];
 }
 
 export interface Reaction {
