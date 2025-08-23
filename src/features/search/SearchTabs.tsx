@@ -179,34 +179,39 @@ export function SearchTabs({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [query, setQuery] = useState(initialQuery);
-  const [debouncedQuery, setDebouncedQuery] = useState(initialQuery);
+  const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [activeTab, setActiveTab] = useState<SearchType>(initialType);
 
-  // Debounce 효과
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(query);
-    }, 300);
+  // 검색 실행 함수
+  const executeSearch = () => {
+    if (query.trim().length > 0) {
+      setSearchQuery(query.trim());
+    }
+  };
 
-    return () => clearTimeout(timer);
-  }, [query]);
+  // Enter 키 핸들러
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      executeSearch();
+    }
+  };
 
   // URL 업데이트
   useEffect(() => {
-    if (debouncedQuery.trim()) {
+    if (searchQuery.trim()) {
       const params = new URLSearchParams();
-      params.set("q", debouncedQuery);
+      params.set("q", searchQuery);
       params.set("type", activeTab);
       router.push(`/search?${params.toString()}`, { scroll: false });
     }
-  }, [debouncedQuery, activeTab, router]);
+  }, [searchQuery, activeTab, router]);
 
   // 검색 쿼리
   const { data, isLoading, error, refetch } = useQuery<SearchResponse>({
-    queryKey: ["search", debouncedQuery, activeTab],
+    queryKey: ["search", searchQuery, activeTab],
     queryFn: () =>
-      searchApi.search(debouncedQuery, activeTab) as Promise<SearchResponse>,
-    enabled: debouncedQuery.trim().length > 0,
+      searchApi.search(searchQuery, activeTab) as Promise<SearchResponse>,
+    enabled: searchQuery.trim().length > 0,
     retry: 1,
   });
 
@@ -231,12 +236,21 @@ export function SearchTabs({
             placeholder="검색어를 입력하세요..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            className="pl-10"
+            onKeyDown={handleKeyDown}
+            className="pl-10 pr-20"
           />
+          <Button
+            onClick={executeSearch}
+            size="sm"
+            className="absolute right-2 top-1/2 transform -translate-y-1/2"
+            disabled={!query.trim()}
+          >
+            검색
+          </Button>
         </div>
 
         {/* 탭 */}
-        {debouncedQuery.trim().length > 0 && (
+        {searchQuery.trim().length > 0 && (
           <div className="flex space-x-1 mt-4 overflow-x-auto">
             {tabs.map((tab) => {
               const Icon = tab.icon;
@@ -262,7 +276,7 @@ export function SearchTabs({
 
       {/* 검색 결과 */}
       <div className="p-4">
-        {!debouncedQuery.trim() ? (
+        {!searchQuery.trim() ? (
           <div className="text-center py-12">
             <Search className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-medium text-foreground mb-2">
@@ -277,7 +291,7 @@ export function SearchTabs({
         ) : error ? (
           <SearchError error={error as Error} onRetry={() => refetch()} />
         ) : !data || !data.results || data.results.length === 0 ? (
-          <EmptyResults type={activeTab} query={debouncedQuery} />
+          <EmptyResults type={activeTab} query={searchQuery} />
         ) : (
           <div className="space-y-4">
             {activeTab === "posts" && (

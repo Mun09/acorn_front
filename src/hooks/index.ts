@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 
 // 인증 관련 훅들
 export { useSession, useLogout } from "./useSession";
+export { useUserReactions } from "./useUserReactions";
 
 // 로컬 스토리지 훅
 export function useLocalStorage<T>(key: string, initialValue: T) {

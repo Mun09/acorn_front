@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers/Providers";
 import { Sidebar } from "@/components/Sidebar";
+import { PopularSymbolsWidget } from "@/components/PopularSymbolsWidget";
 
 // 폰트 설정
 const inter = Inter({ subsets: ["latin"] });
@@ -52,9 +53,12 @@ export default function RootLayout({
               <Sidebar />
 
               {/* 메인 컨텐츠 */}
-              <main className="flex-1 min-h-screen lg:pl-64">
+              <main className="flex-1 min-h-screen lg:pl-64 lg:pr-80">
                 <div className="container mx-auto px-4 py-6">{children}</div>
               </main>
+
+              {/* 우측 사이드바 위젯 */}
+              <PopularSymbolsWidget />
             </div>
           </div>
 

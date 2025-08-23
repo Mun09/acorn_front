@@ -28,53 +28,38 @@ export function useSession() {
   const query = useQuery({
     queryKey: ["session"],
     queryFn: async (): Promise<Session> => {
-      console.log("🔍 Starting session fetch...");
-
       try {
         // 401 응답에 대한 자동 리다이렉트 방지를 위해 직접 fetch 사용
         const response = await fetch("/api/session", {
           credentials: "include", // 쿠키 포함
         });
-        console.log("📡 Got response:", response.status, response.ok);
 
         if (!response.ok) {
-          console.log("❌ Response not ok, returning false auth");
-          const result = { user: null as any, isAuthenticated: false };
-          console.log("🔄 Returning result:", result);
-          return result;
+          return { user: null as any, isAuthenticated: false };
         }
 
         const data = await response.json();
-        console.log("📦 Parsed JSON data:", data);
 
         if (data.error) {
-          console.log("❌ Error in data, returning false auth");
-          const result = { user: null as any, isAuthenticated: false };
-          console.log("🔄 Returning result:", result);
-          return result;
+          return { user: null as any, isAuthenticated: false };
         }
 
         // 백엔드 응답 구조: { message, data: { user } }
-        console.log("🔍 Parsing user data...");
         const user = UserSchema.parse(data.data.user);
-        console.log("✅ Successfully parsed user:", user);
 
-        const result = {
+        return {
           user,
           isAuthenticated: true,
         };
-        console.log("🔄 Returning authenticated result:", result);
-        return result;
       } catch (error) {
-        console.error("💥 Session fetch error:", error);
-        const result = { user: null as any, isAuthenticated: false };
-        console.log("🔄 Returning error result:", result);
-        return result;
+        console.error("Session fetch error:", error);
+        return { user: null as any, isAuthenticated: false };
       }
     },
-    retry: false,
-    staleTime: 5 * 60 * 1000, // 5분
-    // 자동 리페치 비활성화로 불필요한 401 요청 방지
+    retry: 1,
+    staleTime: 30 * 60 * 1000, // 30분으로 증가
+    gcTime: 60 * 60 * 1000, // 1시간
+    // 자동 리페치 최소화
     refetchOnWindowFocus: false,
     refetchOnMount: true,
     refetchOnReconnect: false,

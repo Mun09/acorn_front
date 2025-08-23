@@ -41,9 +41,9 @@ export default function HomePage() {
     error: sessionError,
     isError: sessionIsError,
   } = useSession();
+
   const queryClient = useQueryClient();
   const [feedMode, setFeedMode] = useState<"for_you" | "following">("for_you");
-
   const isAuthenticated = session?.isAuthenticated === true;
 
   // 피드 데이터 가져오기 (로그인된 사용자만)

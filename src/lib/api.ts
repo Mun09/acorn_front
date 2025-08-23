@@ -361,8 +361,9 @@ export const postsApi = {
 
   createPost: (
     text: string,
-    media?: Array<{ url: string; type: "image" | "video" }>
-  ) => apiClient.post("/api/posts", { text, media }),
+    media?: Array<{ url: string; type: "image" | "video" }>,
+    replyTo?: number
+  ) => apiClient.post("/api/posts", { text, media, replyTo }),
 
   updatePost: (
     id: number,
@@ -375,8 +376,9 @@ export const postsApi = {
   reactToPost: (id: number, type: "LIKE" | "BOOKMARK" | "BOOST") =>
     apiClient.post(`/api/posts/${id}/react`, { type }),
 
+  // 백엔드는 토글 방식이므로 같은 엔드포인트를 사용
   unreactToPost: (id: number, type: "LIKE" | "BOOKMARK" | "BOOST") =>
-    apiClient.delete(`/api/posts/${id}/react/${type}`),
+    apiClient.post(`/api/posts/${id}/react`, { type }),
 };
 
 export const usersApi = {
@@ -429,6 +431,9 @@ export const symbolsApi = {
   getSymbolFeed: (queryString?: string) =>
     apiClient.get(`/api/symbols/feed${queryString ? `?${queryString}` : ""}`),
 
+  getTrendingPosts: (queryString?: string) =>
+    apiClient.get(`/api/posts/trending${queryString ? `?${queryString}` : ""}`),
+
   searchSymbols: (options?: {
     query?: string;
     limit?: number;
@@ -449,6 +454,25 @@ export const symbolsApi = {
 
   getSymbolSentiment: (ticker: string) =>
     apiClient.get(`/api/symbols/${ticker}/sentiment`),
+
+  getBookmarkedPosts: (options?: { cursor?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (options?.cursor) params.append("cursor", options.cursor);
+    if (options?.limit) params.append("limit", options.limit.toString());
+    return apiClient.get(`/api/posts/bookmarks?${params.toString()}`);
+  },
+
+  getMyReactions: (options?: {
+    cursor?: string;
+    limit?: number;
+    type?: "LIKE" | "BOOKMARK" | "BOOST";
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.cursor) params.append("cursor", options.cursor);
+    if (options?.limit) params.append("limit", options.limit.toString());
+    if (options?.type) params.append("type", options.type);
+    return apiClient.get(`/api/posts/my-reactions?${params.toString()}`);
+  },
 };
 
 // 기본 export

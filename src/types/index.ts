@@ -83,6 +83,7 @@ export interface Post {
     BOOST?: number;
     BOOKMARK?: number;
   };
+  userReactions?: string[];
   score?: number;
   scoreBreakdown?: any;
   isFollowing?: boolean;
@@ -104,7 +105,6 @@ export interface Post {
   isBookmarked?: boolean;
   reactions?: Reaction[];
   replies?: Post[];
-  userReactions?: string[];
 }
 
 export interface Reaction {
