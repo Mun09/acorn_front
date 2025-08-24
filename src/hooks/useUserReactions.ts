@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSession } from "./useSession";
-import { symbolsApi } from "@/lib/api";
+import { postsApi } from "@/lib/api";
 import { useMemo, useCallback } from "react";
 
 /**
@@ -17,9 +17,9 @@ export function useUserReactions() {
     queryFn: async () => {
       // 각 타입별로 reactions 가져오기
       const [likes, bookmarks, boosts] = await Promise.all([
-        symbolsApi.getMyReactions({ limit: 500, type: "LIKE" }),
-        symbolsApi.getMyReactions({ limit: 500, type: "BOOKMARK" }),
-        symbolsApi.getMyReactions({ limit: 500, type: "BOOST" }),
+        postsApi.getMyReactions({ limit: 500, type: "LIKE" }),
+        postsApi.getMyReactions({ limit: 500, type: "BOOKMARK" }),
+        postsApi.getMyReactions({ limit: 500, type: "BOOST" }),
       ]);
 
       return {

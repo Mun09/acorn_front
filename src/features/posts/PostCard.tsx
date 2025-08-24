@@ -33,19 +33,74 @@ function updatePostInCaches(
   qc.setQueryData(["post", postId], (old: Post | undefined) =>
     old ? updater(old) : old
   );
-  qc.setQueryData(["feed"], (old: any) => {
-    if (!old) return old;
-    if (Array.isArray(old)) {
-      return old.map((p: Post) => (p.id === postId ? updater(p) : p));
+
+  qc.setQueriesData(
+    { queryKey: ["posts"] }, // key가 ["posts", *]로 시작하는 모든 쿼리 대상
+    (old: any) => {
+      if (!old) return old;
+
+      // 2-1) useInfiniteQuery 형태: { pages: [...], pageParams: [...] }
+      if (old.pages && Array.isArray(old.pages)) {
+        return {
+          ...old,
+          pages: old.pages.map((page: any) => {
+            // page 구조 예: { data: { posts: Post[], nextCursor: ... } }
+            if (page?.data?.posts && Array.isArray(page.data.posts)) {
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  posts: page.data.posts.map((p: Post) =>
+                    p.id === postId ? updater(p) : p
+                  ),
+                },
+              };
+            }
+
+            if (Array.isArray(page?.posts)) {
+              return {
+                ...page,
+                posts: page.posts.map((p: Post) =>
+                  p.id === postId ? updater(p) : p
+                ),
+              };
+            }
+            // 혹시 다른 구조라면 여기서 추가 분기
+            return page;
+          }),
+        };
+      }
+
+      // 2-2) 일반 배열 리스트
+      if (Array.isArray(old)) {
+        return old.map((p: Post) => (p.id === postId ? updater(p) : p));
+      }
+
+      // 2-3) items 필드로 들어있는 리스트
+      if (Array.isArray(old.items)) {
+        return {
+          ...old,
+          items: old.items.map((p: Post) => (p.id === postId ? updater(p) : p)),
+        };
+      }
+
+      return old;
     }
-    if (Array.isArray(old.items)) {
-      return {
-        ...old,
-        items: old.items.map((p: Post) => (p.id === postId ? updater(p) : p)),
-      };
-    }
-    return old;
-  });
+  );
+
+  // qc.setQueryData(["feed"], (old: any) => {
+  //   if (!old) return old;
+  //   if (Array.isArray(old)) {
+  //     return old.map((p: Post) => (p.id === postId ? updater(p) : p));
+  //   }
+  //   if (Array.isArray(old.items)) {
+  //     return {
+  //       ...old,
+  //       items: old.items.map((p: Post) => (p.id === postId ? updater(p) : p)),
+  //     };
+  //   }
+  //   return old;
+  // });
 }
 
 export const PostCard = React.memo(
@@ -57,14 +112,7 @@ export const PostCard = React.memo(
     const shouldLoadUserReactions =
       session?.isAuthenticated &&
       (!post.userReactions || post.userReactions.length === 0);
-    const { getUserReactionsForPost, invalidateUserReactions } =
-      useUserReactions();
-
-    // 로컬 상태로 reaction 상태 및 카운트 관리 (더 빠른 UI 업데이트를 위해)
-    const [localUserReactions, setLocalUserReactions] = useState<string[]>([]);
-    const [localReactionCounts, setLocalReactionCounts] = useState<
-      Record<string, number>
-    >({});
+    const { getUserReactionsForPost } = useUserReactions();
 
     // userReactions을 백엔드 데이터 또는 캐시된 데이터로 결정
     const finalUserReactions = useMemo(() => {
@@ -80,42 +128,10 @@ export const PostCard = React.memo(
       getUserReactionsForPost,
     ]);
 
-    // 백엔드에서 받은 데이터를 직접 사용 (메모이제이션)
-    const serverReactionCounts = useMemo(
-      () => post.reactionCounts || {},
-      [post.reactionCounts]
-    );
-
-    // 초기 로컬 상태 설정
-    useEffect(() => {
-      setLocalUserReactions(finalUserReactions);
-      setLocalReactionCounts(serverReactionCounts);
-    }, [finalUserReactions, serverReactionCounts]);
-
-    // 실제 사용할 user reactions 및 counts (로컬 상태 우선)
-    const currentUserReactions =
-      localUserReactions.length > 0 ? localUserReactions : finalUserReactions;
-    const currentReactionCounts =
-      Object.keys(localReactionCounts).length > 0
-        ? localReactionCounts
-        : serverReactionCounts;
-
-    // 백엔드 응답 구조에 맞게 데이터 변환 (메모이제이션)
-    const postMedia = useMemo(() => post.media || [], [post.media]);
-    const postText = useMemo(() => post.text || "", [post.text]);
-    const symbols = useMemo(() => post.symbols || [], [post.symbols]);
-
-    // author를 user로 매핑 (메모이제이션)
-    const user = useMemo(
-      () =>
-        post.user || {
-          id: post.author?.id || 0,
-          handle: post.author?.handle || "",
-          displayName: post.author?.handle || "",
-          email: "",
-        },
-      [post.user, post.author]
-    );
+    // UI는 캐시된 데이터만 사용 (단일 진실의 원천)
+    const currentUserReactions = post.userReactions || finalUserReactions;
+    const currentReactionCounts = post.reactionCounts || {};
+    console.log("Current user reactions:", currentUserReactions);
 
     // 백엔드에서 받은 데이터를 직접 사용 (메모이제이션)
     const reactionCounts = currentReactionCounts;
@@ -130,7 +146,7 @@ export const PostCard = React.memo(
       [currentUserReactions]
     );
 
-    // 리액션 뮤테이션 (정확한 낙관적 업데이트)
+    // 리액션 뮤테이션 (캐시만을 사용한 낙관적 업데이트)
     const reactMutation = useMutation<
       {
         success: boolean;
@@ -161,6 +177,12 @@ export const PostCard = React.memo(
         const prevDetail = queryClient.getQueryData<Post>(["post", post.id]);
         const prevFeed = queryClient.getQueryData(["feed"]);
 
+        if (!prevDetail) {
+          queryClient.setQueryData(["post", post.id], post);
+          console.log("Post not in cache, setting initial data:", post);
+        }
+
+        // 낙관적 업데이트: 캐시 데이터에서만 계산하여 stale closure 방지
         const optimistic = (p: Post): Post => {
           const prevUserReactions = p.userReactions ?? [];
           const had = prevUserReactions.includes(type);
@@ -174,6 +196,12 @@ export const PostCard = React.memo(
             [type]: Math.max(0, (prevCounts[type] || 0) + (had ? -1 : +1)),
           };
 
+          console.log("Optimistic update:", {
+            had,
+            nextUserReactions,
+            nextCounts,
+          });
+
           return {
             ...p,
             userReactions: nextUserReactions,
@@ -181,30 +209,19 @@ export const PostCard = React.memo(
           };
         };
 
+        // 캐시만 업데이트 (단일 진실의 원천)
         updatePostInCaches(queryClient, post.id, optimistic);
 
-        // keep local state in sync immediately
-        setLocalUserReactions((prev) => {
-          const had = prev.includes(type);
-          return had ? prev.filter((r) => r !== type) : [...prev, type];
-        });
-        setLocalReactionCounts((prev) => {
-          const next = { ...prev };
-          const had = currentUserReactions.includes(type);
-          next[type] = Math.max(0, (next[type] || 0) + (had ? -1 : +1));
-          return next;
-        });
+        console.log(prevDetail, prevFeed);
 
         return { prevDetail, prevFeed };
       },
 
       onError: (_err, _vars, ctx) => {
+        // 캐시 롤백
         if (ctx?.prevDetail)
           queryClient.setQueryData(["post", post.id], ctx.prevDetail);
         if (ctx?.prevFeed) queryClient.setQueryData(["feed"], ctx.prevFeed);
-        // restore local state from server-backed values
-        setLocalUserReactions(finalUserReactions);
-        setLocalReactionCounts(serverReactionCounts);
         console.error("Failed to react to post:", _err);
       },
 
@@ -216,65 +233,63 @@ export const PostCard = React.memo(
           reactionCounts: Record<string, number>;
         };
       }) => {
-        // 서버 응답에서 실제 데이터 추출
+        // 서버 응답으로 캐시 정정
         const {
           action,
           type,
           reactionCounts: serverReactionCounts,
         } = response.data;
 
-        // 현재 사용자의 리액션 상태를 서버 응답으로부터 계산
-        const currentServerUserReactions = [...localUserReactions];
-        if (action === "added" && !currentServerUserReactions.includes(type)) {
-          currentServerUserReactions.push(type);
-        } else if (action === "removed") {
-          const index = currentServerUserReactions.indexOf(type);
-          if (index > -1) {
-            currentServerUserReactions.splice(index, 1);
+        const reconcile = (p: Post): Post => {
+          // 서버 응답을 기반으로 정확한 userReactions 계산
+          const currentUserReactions = p.userReactions ?? [];
+          let correctedUserReactions = [...currentUserReactions];
+
+          if (action === "added" && !correctedUserReactions.includes(type)) {
+            correctedUserReactions.push(type);
+          } else if (action === "removed") {
+            correctedUserReactions = correctedUserReactions.filter(
+              (r) => r !== type
+            );
           }
-        }
 
-        console.log("Server response:", action, type, serverReactionCounts);
-        console.log(
-          "Local reactions:",
-          localUserReactions,
-          localReactionCounts
-        );
-
-        // 서버 응답이 현재 로컬 상태와 다른 경우에만 업데이트
-        const needsUserReactionsUpdate =
-          JSON.stringify(localUserReactions.sort()) !==
-          JSON.stringify(currentServerUserReactions.sort());
-        const needsCountsUpdate =
-          JSON.stringify(localReactionCounts) !==
-          JSON.stringify(serverReactionCounts);
-
-        if (needsUserReactionsUpdate || needsCountsUpdate) {
-          const apply = (p: Post): Post => ({
+          return {
             ...p,
-            userReactions: currentServerUserReactions,
+            userReactions: correctedUserReactions,
             reactionCounts: serverReactionCounts,
-          });
-          updatePostInCaches(queryClient, post.id, apply);
+          };
+        };
 
-          if (needsUserReactionsUpdate) {
-            setLocalUserReactions(currentServerUserReactions);
-          }
-          if (needsCountsUpdate) {
-            setLocalReactionCounts(serverReactionCounts);
-          }
-        }
-        // 서버와 로컬이 동일하면 아무것도 하지 않음 (낙관적 업데이트 유지)
+        // 서버 데이터로 캐시 정정
+        updatePostInCaches(queryClient, post.id, reconcile);
       },
 
       onSettled: () => {
-        // no global invalidation
+        // no global invalidation - 캐시만 사용
       },
     });
 
     const handleReaction = (type: "LIKE" | "BOOKMARK" | "BOOST") => {
+      console.log("Triggering reaction mutation:", { type });
       reactMutation.mutate({ type });
     };
+
+    // 백엔드 응답 구조에 맞게 데이터 변환 (메모이제이션)
+    const postMedia = useMemo(() => post.media || [], [post.media]);
+    const postText = useMemo(() => post.text || "", [post.text]);
+    const symbols = useMemo(() => post.symbols || [], [post.symbols]);
+
+    // author를 user로 매핑 (메모이제이션)
+    const user = useMemo(
+      () =>
+        post.user || {
+          id: post.author?.id || 0,
+          handle: post.author?.handle || "",
+          displayName: post.author?.handle || "",
+          email: "",
+        },
+      [post.user, post.author]
+    );
 
     // 텍스트 파싱 (메모이제이션)
     const tokens = useMemo(() => parseRichText(postText), [postText]);
@@ -516,17 +531,15 @@ export const PostCard = React.memo(
       </article>
     );
   },
-  (prevProps, nextProps) => {
-    // post.id가 같고 필수 필드들이 변경되지 않았으면 리렌더 방지
-    return (
-      prevProps.post.id === nextProps.post.id &&
-      prevProps.post.text === nextProps.post.text &&
-      JSON.stringify(prevProps.post.reactionCounts) ===
-        JSON.stringify(nextProps.post.reactionCounts) &&
-      JSON.stringify(prevProps.post.userReactions) ===
-        JSON.stringify(nextProps.post.userReactions) &&
-      prevProps.post._count?.replies === nextProps.post._count?.replies &&
-      prevProps.className === nextProps.className
-    );
+  (prev, next) => {
+    console.log("PostCard comparison:", { prev, next });
+    const a = prev.post,
+      b = next.post;
+    if (a.id !== b.id) return false;
+    if (a.text !== b.text) return false;
+    if (a._count?.replies !== b._count?.replies) return false;
+    if (a.userReactions !== b.userReactions) return false;
+    if (a.reactionCounts !== b.reactionCounts) return false;
+    return prev.className === next.className;
   }
 );

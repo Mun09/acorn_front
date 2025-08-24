@@ -379,10 +379,56 @@ export const postsApi = {
   // 백엔드는 토글 방식이므로 같은 엔드포인트를 사용
   unreactToPost: (id: number, type: "LIKE" | "BOOKMARK" | "BOOST") =>
     apiClient.post(`/api/posts/${id}/react`, { type }),
+
+  getBookmarkedPosts: (options?: { cursor?: string; limit?: number }) => {
+    const params = new URLSearchParams();
+    if (options?.cursor) params.append("cursor", options.cursor);
+    if (options?.limit) params.append("limit", options.limit.toString());
+    return apiClient.get(`/api/posts/bookmarks?${params.toString()}`);
+  },
+
+  getMyReactions: (options?: {
+    cursor?: string;
+    limit?: number;
+    type?: "LIKE" | "BOOKMARK" | "BOOST";
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.cursor) params.append("cursor", options.cursor);
+    if (options?.limit) params.append("limit", options.limit.toString());
+    if (options?.type) params.append("type", options.type);
+    return apiClient.get(`/api/posts/my-reactions?${params.toString()}`);
+  },
 };
 
 export const usersApi = {
   getProfile: (handle: string) => apiClient.get(`/api/users/${handle}`),
+
+  getUserPosts: async (
+    handle: string,
+    options?: { cursor?: string; limit?: number }
+  ) => {
+    const params = new URLSearchParams();
+    if (options?.cursor) params.append("cursor", options.cursor);
+    if (options?.limit) params.append("limit", options.limit.toString());
+    const qs = params.toString();
+
+    const resp: any = await apiClient.get(
+      `/api/users/${handle}/posts${qs ? `?${qs}` : ""}`
+    );
+
+    // Normalize possible response shapes:
+    // - { posts, hasMore, nextCursor }
+    // - { data: { posts }, nextCursor }
+    // - { data: { posts, nextCursor } }
+    const posts = resp.posts || resp.data?.posts || [];
+    const nextCursor = resp.nextCursor || resp.data?.nextCursor || null;
+    const hasMore =
+      typeof resp.hasMore === "boolean"
+        ? resp.hasMore
+        : (resp.data?.hasMore ?? (nextCursor ? true : false));
+
+    return { posts, nextCursor, hasMore, raw: resp };
+  },
 
   updateProfile: (data: any) => apiClient.patch("/api/users/me", data),
 
@@ -454,25 +500,6 @@ export const symbolsApi = {
 
   getSymbolSentiment: (ticker: string) =>
     apiClient.get(`/api/symbols/${ticker}/sentiment`),
-
-  getBookmarkedPosts: (options?: { cursor?: string; limit?: number }) => {
-    const params = new URLSearchParams();
-    if (options?.cursor) params.append("cursor", options.cursor);
-    if (options?.limit) params.append("limit", options.limit.toString());
-    return apiClient.get(`/api/posts/bookmarks?${params.toString()}`);
-  },
-
-  getMyReactions: (options?: {
-    cursor?: string;
-    limit?: number;
-    type?: "LIKE" | "BOOKMARK" | "BOOST";
-  }) => {
-    const params = new URLSearchParams();
-    if (options?.cursor) params.append("cursor", options.cursor);
-    if (options?.limit) params.append("limit", options.limit.toString());
-    if (options?.type) params.append("type", options.type);
-    return apiClient.get(`/api/posts/my-reactions?${params.toString()}`);
-  },
 };
 
 // 기본 export

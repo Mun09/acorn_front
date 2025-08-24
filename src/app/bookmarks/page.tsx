@@ -1,7 +1,7 @@
 "use client";
 
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { symbolsApi } from "@/lib/api";
+import { postsApi } from "@/lib/api";
 import { PostCard } from "@/features/posts/PostCard";
 import { Post } from "@/types";
 import { Bookmark } from "lucide-react";
@@ -17,7 +17,7 @@ export default function BookmarksPage() {
   } = useInfiniteQuery({
     queryKey: ["posts", "bookmarks"],
     queryFn: ({ pageParam }) =>
-      symbolsApi.getBookmarkedPosts({ cursor: pageParam }),
+      postsApi.getBookmarkedPosts({ cursor: pageParam }),
     initialPageParam: undefined,
     getNextPageParam: (lastPage) => lastPage.data.nextCursor,
     staleTime: 1000 * 60 * 5, // 5분

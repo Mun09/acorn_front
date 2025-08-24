@@ -96,8 +96,7 @@ export default function HomePage() {
   // 모든 포스트 플래튼화
   const posts =
     data?.pages.flatMap((page: any) => {
-      // 백엔드 응답 구조: { success: true, data: { posts: [...], nextCursor: "..." } }
-      return page.data?.posts || page.posts || [];
+      return page.posts || [];
     }) || [];
 
   return (

@@ -199,7 +199,7 @@ export default function SymbolPage() {
     isError,
     error,
   } = useInfiniteQuery({
-    queryKey: ["symbol-posts", ticker, activeTab],
+    queryKey: ["posts", ticker, activeTab],
     queryFn: async ({ pageParam = undefined }) => {
       const params = new URLSearchParams({
         sort: activeTab,
