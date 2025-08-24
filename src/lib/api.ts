@@ -416,10 +416,6 @@ export const usersApi = {
       `/api/users/${handle}/posts${qs ? `?${qs}` : ""}`
     );
 
-    // Normalize possible response shapes:
-    // - { posts, hasMore, nextCursor }
-    // - { data: { posts }, nextCursor }
-    // - { data: { posts, nextCursor } }
     const posts = resp.posts || resp.data?.posts || [];
     const nextCursor = resp.nextCursor || resp.data?.nextCursor || null;
     const hasMore =

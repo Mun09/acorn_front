@@ -67,11 +67,11 @@ export function Nav() {
             </button>
 
             <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">
-                  A
-                </span>
-              </div>
+              <img
+                src="/app/icon.png"
+                alt="Acorn Logo"
+                className="w-8 h-8 rounded-lg"
+              />
               <span className="font-bold text-xl text-foreground">Acorn</span>
             </Link>
           </div>

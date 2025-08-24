@@ -16,6 +16,8 @@ import {
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import Image from "next/image";
+import acornIcon from "@/assets/icon.png"; // page.tsx 기준 상대 경로
 
 interface SidebarItem {
   icon: React.ComponentType<{ className?: string }>;
@@ -52,12 +54,12 @@ const sidebarItems: SidebarItem[] = [
     href: "/notifications",
     requireAuth: true,
   },
-  {
-    icon: MessageCircle,
-    label: "Messages",
-    href: "/messages",
-    requireAuth: true,
-  },
+  // {
+  //   icon: MessageCircle,
+  //   label: "Messages",
+  //   href: "/messages",
+  //   requireAuth: true,
+  // },
   {
     icon: Bookmark,
     label: "Bookmarks",
@@ -111,11 +113,13 @@ export function Sidebar() {
           {/* 로고 영역 */}
           <div className="flex items-center justify-center h-16 px-4 border-b border-border">
             <Link href="/" className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-lg">
-                  A
-                </span>
-              </div>
+              <Image
+                src={acornIcon}
+                alt="ACORN 아이콘"
+                width={32}
+                height={32}
+                placeholder="blur" // 이미지를 불러오는 동안 흐릿하게 표시 (선택 사항)
+              />
               <span className="text-xl font-bold text-foreground">Acorn</span>
             </Link>
           </div>
