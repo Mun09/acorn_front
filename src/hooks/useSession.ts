@@ -88,14 +88,14 @@ export function useSession() {
     return () => clearInterval(refreshInterval);
   }, [query.data?.isAuthenticated]);
 
-  console.log("🔄 useSession query state:", {
-    data: query.data,
-    isLoading: query.isLoading,
-    isError: query.isError,
-    error: query.error,
-    status: query.status,
-    fetchStatus: query.fetchStatus,
-  });
+  // console.log("🔄 useSession query state:", {
+  //   data: query.data,
+  //   isLoading: query.isLoading,
+  //   isError: query.isError,
+  //   error: query.error,
+  //   status: query.status,
+  //   fetchStatus: query.fetchStatus,
+  // });
 
   return query;
 }

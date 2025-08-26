@@ -88,7 +88,7 @@ export interface Post {
   scoreBreakdown?: any;
   isFollowing?: boolean;
   // 호환성을 위한 추가 필드들 (PostCard에서 사용)
-  user?: {
+  user: {
     id: number;
     handle: string;
     displayName?: string;

@@ -1,13 +1,14 @@
 "use client";
 
-import React from "react";
-import Link from "next/link";
-import { useSession } from "@/hooks/useSession";
-import { Button } from "@/components/ui/Button";
+import { useParams } from "next/navigation";
 import { ProfileContent } from "@/features/profile/ProfileContent";
+import { useSession } from "@/hooks";
+import Link from "next/link";
+import { Button } from "@/components/ui/Button";
 
-export default function ProfilePage() {
+export default function UserProfilePage() {
   const { data: session, isLoading: sessionLoading } = useSession();
+  const { handle } = useParams<{ handle: string }>();
 
   if (sessionLoading) return null;
 
@@ -25,7 +26,10 @@ export default function ProfilePage() {
     );
   }
 
-  // 세션이 확정된 뒤에만 "내용 컴포넌트" 렌더 → 내부 훅 순서가 항상 일정
-  const handle = (session.user as any)?.handle as string;
-  return <ProfileContent profileHandle={handle} viewerHandle={handle} />;
+  return (
+    <ProfileContent
+      profileHandle={handle}
+      viewerHandle={session?.user?.handle}
+    />
+  );
 }

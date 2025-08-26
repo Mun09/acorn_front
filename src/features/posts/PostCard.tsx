@@ -12,7 +12,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
-import { postsApi, symbolsApi } from "@/lib/api";
+import { postsApi } from "@/lib/api";
 import { parseRichText } from "@/lib/richText";
 import { Post, MediaItem } from "@/types";
 import { cn } from "@/lib/utils";
@@ -211,8 +211,6 @@ export const PostCard = React.memo(
 
         // 캐시만 업데이트 (단일 진실의 원천)
         updatePostInCaches(queryClient, post.id, optimistic);
-
-        console.log(prevDetail, prevFeed);
 
         return { prevDetail, prevFeed };
       },
@@ -532,7 +530,6 @@ export const PostCard = React.memo(
     );
   },
   (prev, next) => {
-    console.log("PostCard comparison:", { prev, next });
     const a = prev.post,
       b = next.post;
     if (a.id !== b.id) return false;

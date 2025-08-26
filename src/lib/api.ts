@@ -1,7 +1,9 @@
 // API 클라이언트 설정 (Fetch 기반)
 
 import { z } from "zod";
-import { env, getApiUrl, logger, isDevelopment } from "./config";
+import { env, logger, isDevelopment } from "./config";
+import { UserProfile } from "@/types/user";
+import { Post } from "@/types";
 
 // 공통 에러 타입
 export interface ApiError {
@@ -398,10 +400,29 @@ export const postsApi = {
     if (options?.type) params.append("type", options.type);
     return apiClient.get(`/api/posts/my-reactions?${params.toString()}`);
   },
+
+  getUserPosts: (
+    handle: string,
+    options?: { cursor?: string; limit?: number }
+  ): Promise<{
+    posts: Post[];
+    nextCursor: string | null;
+    hasMore: boolean;
+  }> => {
+    const params = new URLSearchParams();
+    if (options?.cursor) params.append("cursor", options.cursor);
+    if (options?.limit) params.append("limit", options.limit.toString());
+    return apiClient.get(`/api/users/${handle}/posts?${params.toString()}`);
+  },
 };
 
 export const usersApi = {
-  getProfile: (handle: string) => apiClient.get(`/api/users/${handle}`),
+  getProfile: async (handle: string) => {
+    const resp: { user: UserProfile } = await apiClient.get(
+      `/api/users/${handle}`
+    );
+    return resp.user;
+  },
 
   getUserPosts: async (
     handle: string,
@@ -428,10 +449,11 @@ export const usersApi = {
 
   updateProfile: (data: any) => apiClient.patch("/api/users/me", data),
 
-  followUser: (handle: string) => apiClient.post(`/api/users/${handle}/follow`),
+  followUser: (handle: string): Promise<void> =>
+    apiClient.post(`/api/users/${handle}/follow`).then(() => {}),
 
-  unfollowUser: (handle: string) =>
-    apiClient.delete(`/api/users/${handle}/follow`),
+  unfollowUser: (handle: string): Promise<void> =>
+    apiClient.post(`/api/users/${handle}/follow`).then(() => {}),
 
   getFollowers: (handle: string) =>
     apiClient.get(`/api/users/${handle}/followers`),
