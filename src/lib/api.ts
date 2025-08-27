@@ -4,6 +4,8 @@ import { z } from "zod";
 import { env, logger, isDevelopment } from "./config";
 import { UserProfile } from "@/types/user";
 import { Post } from "@/types";
+import { auth } from "./firebaseClient";
+import { MeResponseSchema } from "@/types/schema";
 
 // 공통 에러 타입
 export interface ApiError {
@@ -63,7 +65,6 @@ export const tokenManager = {
   },
 };
 
-// 커스텀 fetch 래퍼
 export class ApiFetch {
   private baseURL: string;
   private onUnauthorized?: () => void;
@@ -77,13 +78,13 @@ export class ApiFetch {
     this.baseURL = baseURL;
   }
 
-  // 인증 실패 시 콜백 설정
+  // 인증 실패 시 콜백 설정(예: 로그인 페이지 이동)
   setUnauthorizedHandler(handler: () => void): void {
     this.onUnauthorized = handler;
   }
 
-  // 토큰 갱신 처리
-  private async refreshToken(): Promise<boolean> {
+  // ★ 세션 쿠키 재발급: Firebase에서 새 idToken → 서버 /auth/session-cookie 호출
+  private async reissueSessionCookie(): Promise<boolean> {
     if (this.isRefreshing) {
       return new Promise((resolve, reject) => {
         this.failedQueue.push({ resolve, reject });
@@ -93,22 +94,42 @@ export class ApiFetch {
     this.isRefreshing = true;
 
     try {
-      const response = await fetch("/api/session/refresh", {
-        method: "POST",
-        credentials: "include",
-      });
-
-      if (response.ok) {
-        this.processQueue(null, true);
-        return true;
-      } else {
+      const user = auth.currentUser;
+      if (!user) {
+        // 로그인 상태가 아님
         this.processQueue(
-          new ApiError(401, "TOKEN_REFRESH_FAILED", "토큰 갱신 실패"),
+          new ApiError(401, "NO_CURRENT_USER", "로그인이 필요합니다"),
           false
         );
         return false;
       }
-    } catch (error) {
+
+      // 새 idToken 발급 (forceRefresh = true 권장)
+      const idToken = await user.getIdToken(true);
+
+      const resp = await fetch(`${this.baseURL}/api/auth/session-cookie`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // httpOnly 쿠키 수신
+        body: JSON.stringify({ idToken }),
+      });
+
+      if (!resp.ok) {
+        const txt = await resp.text();
+        this.processQueue(
+          new ApiError(
+            401,
+            "SESSION_COOKIE_REISSUE_FAILED",
+            txt || "세션 재발급 실패"
+          ),
+          false
+        );
+        return false;
+      }
+
+      this.processQueue(null, true);
+      return true;
+    } catch (error: any) {
       this.processQueue(error, false);
       return false;
     } finally {
@@ -116,115 +137,82 @@ export class ApiFetch {
     }
   }
 
-  // 큐에 있는 요청들 처리
+  // 큐에 쌓인 401 재시도 대기중 요청 처리
   private processQueue(error: any, success: boolean): void {
     this.failedQueue.forEach(({ resolve, reject }) => {
-      if (success) {
-        resolve(success);
-      } else {
-        reject(error);
-      }
+      if (success) resolve(true);
+      else reject(error);
     });
-
     this.failedQueue = [];
   }
 
-  // 기본 fetch 옵션 생성
+  // 기본 fetch 옵션
   private createRequestOptions(options: RequestInit = {}): RequestInit {
-    // httpOnly 쿠키 사용으로 Authorization 헤더 불필요
-    const defaultOptions: RequestInit = {
-      credentials: "include", // httpOnly 쿠키 포함 (가장 중요!)
-      headers: {
-        "Content-Type": "application/json",
-        ...options.headers,
-      },
-      ...options,
+    const defaultHeaders: HeadersInit = {
+      "Content-Type": "application/json",
+      ...(options.headers || {}),
     };
-
-    return defaultOptions;
+    return {
+      credentials: "include", // ★ 핵심: 세션 쿠키 포함
+      ...options,
+      headers: defaultHeaders,
+    };
   }
 
-  // URL 생성
   private createURL(endpoint: string): string {
     return `${this.baseURL}${endpoint}`;
   }
 
-  // 응답 처리
+  // 공통 응답 처리(+ 401 자동 재발급)
   private async handleResponse<T>(
     response: Response,
     originalRequest?: () => Promise<Response>
   ): Promise<T> {
-    // 401 Unauthorized 처리 - 토큰 갱신 시도
     if (response.status === 401 && originalRequest) {
-      if (isDevelopment) {
-        logger.warn("API 401 Unauthorized - 토큰 갱신 시도");
+      // 개발 로그 원하면 주석 해제
+      // if (isDevelopment) logger.warn("API 401 Unauthorized - 세션 재발급 시도");
+
+      const refreshed = await this.reissueSessionCookie();
+      if (refreshed) {
+        const retryRes = await originalRequest();
+        return this.handleResponse<T>(retryRes); // 재귀 처리
       }
 
-      const refreshSuccess = await this.refreshToken();
-
-      if (refreshSuccess && originalRequest) {
-        // 토큰 갱신 성공 시 원래 요청 재시도
-        const retryResponse = await originalRequest();
-        return this.handleResponse(retryResponse);
-      }
-
-      // 토큰 갱신 실패 시 기존 로직 실행
-      tokenManager.clearToken();
-
-      if (this.onUnauthorized) {
-        this.onUnauthorized();
-      } else if (typeof window !== "undefined") {
-        const currentPath = window.location.pathname;
-        if (currentPath !== "/" && currentPath !== "/home") {
-          window.location.href = "/login";
-        }
-      }
+      // 재발급 실패 → 인증 해제
+      if (this.onUnauthorized) this.onUnauthorized();
+      else if (typeof window !== "undefined") window.location.href = "/login";
 
       throw new ApiError(401, "UNAUTHORIZED", "인증이 필요합니다.");
     }
 
     let data: any;
     const contentType = response.headers.get("content-type");
-
-    if (contentType && contentType.includes("application/json")) {
-      data = await response.json();
-    } else {
-      data = await response.text();
-    }
+    data = contentType?.includes("application/json")
+      ? await response.json()
+      : await response.text();
 
     if (!response.ok) {
       throw new ApiError(
         response.status,
-        data.code || response.statusText,
-        data.message || `HTTP ${response.status} ${response.statusText}`
+        (data && (data.code || data.error)) || response.statusText,
+        (data && data.message) ||
+          `HTTP ${response.status} ${response.statusText}`
       );
     }
 
     return data;
   }
 
-  // GET 요청
   async get<T>(endpoint: string, schema?: z.ZodSchema<T>): Promise<T> {
     const url = this.createURL(endpoint);
     const options = this.createRequestOptions({ method: "GET" });
 
-    if (isDevelopment) {
-      logger.info("GET", url);
-    }
-
     const makeRequest = () => fetch(url, options);
     const response = await makeRequest();
     const data = await this.handleResponse<T>(response, makeRequest);
-
-    // Zod 스키마 검증
-    if (schema) {
-      return schema.parse(data);
-    }
-
-    return data;
+    return schema ? schema.parse(data) : data;
   }
 
-  // POST 요청
   async post<T>(
     endpoint: string,
     body?: any,
@@ -236,23 +224,12 @@ export class ApiFetch {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (isDevelopment) {
-      logger.info("POST", url, body);
-    }
-
     const makeRequest = () => fetch(url, options);
     const response = await makeRequest();
     const data = await this.handleResponse<T>(response, makeRequest);
-
-    // Zod 스키마 검증
-    if (schema) {
-      return schema.parse(data);
-    }
-
-    return data;
+    return schema ? schema.parse(data) : data;
   }
 
-  // PATCH 요청
   async patch<T>(
     endpoint: string,
     body?: any,
@@ -264,39 +241,20 @@ export class ApiFetch {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (isDevelopment) {
-      logger.info("PATCH", url, body);
-    }
-
-    const response = await fetch(url, options);
-    const data = await this.handleResponse<T>(response);
-
-    // Zod 스키마 검증
-    if (schema) {
-      return schema.parse(data);
-    }
-
-    return data;
+    const makeRequest = () => fetch(url, options);
+    const response = await makeRequest();
+    const data = await this.handleResponse<T>(response, makeRequest);
+    return schema ? schema.parse(data) : data;
   }
 
-  // DELETE 요청
   async delete<T>(endpoint: string, schema?: z.ZodSchema<T>): Promise<T> {
     const url = this.createURL(endpoint);
     const options = this.createRequestOptions({ method: "DELETE" });
 
-    if (isDevelopment) {
-      logger.info("DELETE", url);
-    }
-
-    const response = await fetch(url, options);
-    const data = await this.handleResponse<T>(response);
-
-    // Zod 스키마 검증
-    if (schema) {
-      return schema.parse(data);
-    }
-
-    return data;
+    const makeRequest = () => fetch(url, options);
+    const response = await makeRequest();
+    const data = await this.handleResponse<T>(response, makeRequest);
+    return schema ? schema.parse(data) : data;
   }
 }
 
@@ -340,19 +298,18 @@ export function useApiUnauthorizedHandler() {
 
   return { handleUnauthorized };
 }
+
 // API 엔드포인트 헬퍼들
 export const authApi = {
-  login: (email: string, password: string) =>
-    apiClient.post("/api/auth/login", { email, password }),
-
-  signup: (email: string, handle: string, password: string) =>
-    apiClient.post("/api/auth/signup", { email, handle, password }),
+  signup: (idToken: string, handle: string) =>
+    apiClient.post("/api/auth/signup", { idToken, handle }),
 
   logout: () => apiClient.post("/api/auth/logout"),
 
-  getMe: () => apiClient.get("/api/auth/me"),
+  getMe: () => apiClient.get("/api/auth/me", MeResponseSchema),
 
-  refresh: () => apiClient.post("/api/auth/refresh"),
+  createSessionCookie: (idToken: string) =>
+    apiClient.post("/api/auth/session-cookie", { idToken }),
 };
 
 export const postsApi = {

@@ -107,7 +107,7 @@ export function Nav() {
 
             {isLoading ? (
               <div className="w-8 h-8 bg-muted rounded-full animate-pulse" />
-            ) : session?.isAuthenticated ? (
+            ) : session?.isAuthenticated && session.user ? (
               <>
                 {/* 알림 버튼 */}
                 <Link href="/notifications">

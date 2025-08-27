@@ -5,8 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Hash, X } from "lucide-react";
 import { useState } from "react";
 import { symbolsApi } from "@/lib/api";
+import { useSession } from "@/hooks/useSession";
 
 export function PopularSymbolsWidget() {
+  const { data: session, isLoading: isSessionLoading } = useSession();
   const [isVisible, setIsVisible] = useState(true);
 
   // Get popular symbols
@@ -17,9 +19,16 @@ export function PopularSymbolsWidget() {
       return (data as any).data?.symbols || [];
     },
     staleTime: 5 * 60 * 1000, // 5분
+    enabled: !!session?.isAuthenticated,
   });
 
-  if (!isVisible || !popularSymbols || popularSymbols.length === 0) {
+  if (
+    !isVisible ||
+    !popularSymbols ||
+    popularSymbols.length === 0 ||
+    !session ||
+    isSessionLoading
+  ) {
     return null;
   }
 

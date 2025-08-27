@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils";
 import Image from "next/image";
 import acornIcon from "@/assets/icon.png"; // page.tsx 기준 상대 경로
+import { notificationsApi } from "@/lib/api";
 
 interface SidebarItem {
   icon: React.ComponentType<{ className?: string }>;
@@ -82,13 +83,12 @@ const sidebarItems: SidebarItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { data: session } = useSession();
+  const { data: session, isLoading } = useSession();
 
   // Get unread notifications count
   const { data: unreadCount = 0 } = useQuery({
     queryKey: ["notifications", "unread-count"],
     queryFn: async () => {
-      const { notificationsApi } = await import("@/lib/api");
       const data = await notificationsApi.getUnreadCount();
       return (data as any).count;
     },
@@ -158,7 +158,7 @@ export function Sidebar() {
           </nav>
 
           {/* 사이드바 하단 */}
-          {session?.isAuthenticated && (
+          {session?.isAuthenticated && session.user && (
             <div className="p-4 border-t border-border">
               <div className="flex items-center space-x-3 p-3 rounded-lg bg-accent/50">
                 <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
