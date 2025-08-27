@@ -1,3 +1,4 @@
+// app/(auth)/_components/SigninSocialForm.tsx
 "use client";
 
 import { useState } from "react";
@@ -10,15 +11,9 @@ import {
   GoogleAuthProvider,
   GithubAuthProvider,
 } from "firebase/auth";
-import { authApi, usersApi } from "@/lib/api";
+import { authApi } from "@/lib/api";
 
-export function SignupSocialForm({
-  handle,
-  handleError,
-}: {
-  handle: string;
-  handleError?: string;
-}) {
+export function SigninSocialForm() {
   const [apiError, setApiError] = useState("");
   const [loading, setLoading] = useState(false);
   const qc = useQueryClient();
@@ -26,24 +21,14 @@ export function SignupSocialForm({
 
   const finalize = async () => {
     await qc.invalidateQueries({ queryKey: ["session"] });
+    await qc.refetchQueries({ queryKey: ["session"] });
     router.push("/");
   };
 
-  const doSignup = async (provider: "google" | "github") => {
+  const doSignin = async (provider: "google" | "github") => {
     try {
       setApiError("");
       setLoading(true);
-
-      if (!handle || handleError) {
-        setApiError(handleError || "핸들을 입력해주세요");
-        return;
-      }
-
-      const existingUser = await authApi.getExistingHandle(handle);
-      if (existingUser) {
-        setApiError("이미 존재하는 핸들입니다");
-        return;
-      }
 
       const providerInstance =
         provider === "google"
@@ -53,28 +38,23 @@ export function SignupSocialForm({
       const cred = await signInWithPopup(auth, providerInstance);
       const idToken = await cred.user.getIdToken(true);
 
+      // 세션 쿠키 생성 (로그인 시에도 동일)
       await authApi.createSessionCookie(idToken);
-      await authApi.signup(idToken, handle);
 
       await finalize();
     } catch (e: any) {
       if (e?.code === "auth/popup-closed-by-user") {
         setApiError("팝업이 닫혀서 인증이 취소되었습니다");
       } else if (e?.code === "auth/account-exists-with-different-credential") {
-        setApiError("이미 다른 제공자 계정과 연결된 이메일입니다");
+        setApiError("같은 이메일이 다른 로그인 방식과 연결되어 있습니다");
+      } else if (e?.code === "auth/cancelled-popup-request") {
+        setApiError("이미 열려있는 인증 팝업이 있습니다. 잠시 후 시도해주세요");
+      } else if (e?.code === "auth/unauthorized-domain") {
+        setApiError(
+          "허용되지 않은 도메인에서의 요청입니다(Firebase 콘솔 확인 필요)"
+        );
       } else {
         setApiError(e?.message || "소셜 로그인 중 오류가 발생했습니다");
-      }
-
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          // 방금 로그인한 상태라 reauth 필요 없이 대부분 삭제 가능
-          await user.delete();
-        }
-        await auth.signOut();
-      } catch {
-        // 만약 삭제 실패시(희귀)에는 주기적으로 청소하는 백그라운드 잡에 맡김 (아래 4번)
       }
     } finally {
       setLoading(false);
@@ -92,7 +72,7 @@ export function SignupSocialForm({
           type="button"
           variant="outline"
           className="w-1/2"
-          onClick={() => doSignup("google")}
+          onClick={() => doSignin("google")}
           disabled={loading}
         >
           구글로 계속하기
@@ -101,7 +81,7 @@ export function SignupSocialForm({
           type="button"
           variant="outline"
           className="w-1/2"
-          onClick={() => doSignup("github")}
+          onClick={() => doSignin("github")}
           disabled={loading}
         >
           GitHub로 계속하기

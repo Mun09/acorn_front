@@ -21,6 +21,7 @@ import {
   NotificationKind,
   NotificationResponse,
 } from "@/types";
+import { notificationsApi } from "@/lib/api";
 
 type FilterType = "all" | NotificationKind;
 
@@ -100,7 +101,6 @@ export default function NotificationsPage() {
   const { data, isLoading, error } = useQuery<NotificationResponse>({
     queryKey: ["notifications", activeFilter],
     queryFn: async () => {
-      const { notificationsApi } = await import("@/lib/api");
       const params = new URLSearchParams();
       if (activeFilter !== "all") {
         params.append("type", activeFilter);

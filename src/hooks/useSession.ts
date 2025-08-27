@@ -20,8 +20,9 @@ export function useSession() {
             },
           }
         );
-        const parsed = MeResponseSchema.parse(res.json());
 
+        const resp = await res.json();
+        const parsed = MeResponseSchema.parse(resp);
         return { user: parsed.data.user, isAuthenticated: true };
       } catch (e: any) {
         return { user: null, isAuthenticated: false };

@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/hooks/useSession";
-import LoginForm from "@/features/auth/LoginForm";
+import SigninForm from "@/features/auth/SigninForm";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -28,5 +28,5 @@ export default function LoginPage() {
     );
   }
 
-  return <LoginForm />;
+  return <SigninForm />;
 }

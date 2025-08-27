@@ -1,3 +1,4 @@
+// app/(auth)/_components/SigninEmailForm.tsx
 "use client";
 
 import { useState } from "react";
@@ -7,27 +8,16 @@ import { z } from "zod";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { auth } from "@/lib/firebaseClient";
-import { createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { authApi } from "@/lib/api";
 
 const EmailSchema = z.object({
   email: z.string().email("유효한 이메일"),
   password: z.string().min(6, "최소 6자"),
-  confirmPassword: z.string(),
 });
 
-export function SignupEmailForm({
-  handle,
-  handleError,
-}: {
-  handle: string;
-  handleError?: string;
-}) {
-  const [form, setForm] = useState({
-    email: "",
-    password: "",
-    confirmPassword: "",
-  });
+export function SigninEmailForm() {
+  const [form, setForm] = useState({ email: "", password: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -39,18 +29,6 @@ export function SignupEmailForm({
     setForm((p) => ({ ...p, [name]: value }));
     setErrors((e) => ({ ...e, [name]: "" }));
     setApiError("");
-  };
-
-  const assertPasswordMatch = (v: typeof form) => {
-    if (v.password !== v.confirmPassword) {
-      throw new z.ZodError([
-        {
-          code: "custom",
-          path: ["confirmPassword"],
-          message: "비밀번호가 일치하지 않습니다",
-        } as any,
-      ]);
-    }
   };
 
   const finalize = async () => {
@@ -65,34 +43,18 @@ export function SignupEmailForm({
     setErrors({});
 
     try {
-      if (!handle || handleError) {
-        setErrors((e) => ({
-          ...e,
-          handle: handleError || "핸들을 확인해주세요",
-        }));
-        throw new Error("Invalid handle");
-      }
-
       const parsed = EmailSchema.parse(form);
-      assertPasswordMatch(parsed);
 
-      const existingUser = await authApi.getExistingHandle(handle);
-      if (existingUser) {
-        setApiError("이미 존재하는 핸들입니다");
-        return;
-      }
-
-      // Firebase 계정 생성
-      const cred = await createUserWithEmailAndPassword(
+      // Firebase 이메일/비번 로그인
+      const cred = await signInWithEmailAndPassword(
         auth,
         parsed.email,
         parsed.password
       );
       const idToken = await cred.user.getIdToken(true);
 
-      // 세션 쿠키 생성 + 서비스 DB 가입 (핸들 확정)
+      // 세션 쿠키 생성 (백엔드)
       await authApi.createSessionCookie(idToken);
-      await authApi.signup(idToken, handle);
 
       await finalize();
     } catch (err: any) {
@@ -100,25 +62,18 @@ export function SignupEmailForm({
         const f: Record<string, string> = {};
         err.errors.forEach((e) => (f[String(e.path[0])] = e.message));
         setErrors(f);
-      } else if (err?.code === "auth/email-already-in-use") {
-        setErrors((p) => ({ ...p, email: "이미 사용 중인 이메일입니다" }));
       } else if (err?.code === "auth/invalid-email") {
         setErrors((p) => ({ ...p, email: "유효하지 않은 이메일 형식입니다" }));
-      } else if (err?.code === "auth/weak-password") {
-        setErrors((p) => ({ ...p, password: "비밀번호가 너무 약합니다" }));
-      } else if (err?.message !== "Invalid handle") {
-        setApiError(err?.message || "회원가입 중 오류가 발생했습니다");
-      }
-
-      try {
-        const user = auth.currentUser;
-        if (user) {
-          // 방금 로그인한 상태라 reauth 필요 없이 대부분 삭제 가능
-          await user.delete();
-        }
-        await auth.signOut();
-      } catch {
-        // 만약 삭제 실패시(희귀)에는 주기적으로 청소하는 백그라운드 잡에 맡김 (아래 4번)
+      } else if (err?.code === "auth/user-disabled") {
+        setApiError("비활성화된 계정입니다");
+      } else if (err?.code === "auth/user-not-found") {
+        setApiError("가입되지 않은 이메일입니다");
+      } else if (err?.code === "auth/wrong-password") {
+        setErrors((p) => ({ ...p, password: "비밀번호가 올바르지 않습니다" }));
+      } else if (err?.code === "auth/too-many-requests") {
+        setApiError("요청이 너무 많습니다. 잠시 후 다시 시도해주세요");
+      } else {
+        setApiError(err?.message || "로그인 중 오류가 발생했습니다");
       }
     } finally {
       setLoading(false);
@@ -145,15 +100,6 @@ export function SignupEmailForm({
         disabled={loading}
         className="w-full"
       />
-      <Input
-        type="password"
-        placeholder="비밀번호 확인"
-        value={form.confirmPassword}
-        onChange={(e) => setField("confirmPassword", e.target.value)}
-        error={errors.confirmPassword}
-        disabled={loading}
-        className="w-full"
-      />
 
       {apiError && (
         <div className="text-destructive text-sm text-center">{apiError}</div>
@@ -165,8 +111,13 @@ export function SignupEmailForm({
         loading={loading}
         disabled={loading}
       >
-        이메일로 회원가입
+        로그인
       </Button>
+
+      {/* 선택: 비밀번호 재설정 페이지 라우팅 버튼 */}
+      {/* <Button type="button" variant="ghost" className="w-full" onClick={() => router.push("/reset-password")}>
+        비밀번호를 잊으셨나요?
+      </Button> */}
     </form>
   );
 }

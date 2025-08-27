@@ -9,6 +9,7 @@ export const UserSchema = z.object({
   verifiedFlags: z.record(z.boolean()).nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  // firebaseUid: z.string(),
 });
 
 export const MeResponseSchema = z.object({

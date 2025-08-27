@@ -310,6 +310,13 @@ export const authApi = {
 
   createSessionCookie: (idToken: string) =>
     apiClient.post("/api/auth/session-cookie", { idToken }),
+
+  getExistingHandle: async (handle: string): Promise<UserProfile | null> => {
+    const resp: { user: UserProfile | null } = await apiClient.get(
+      `/api/auth/${handle}/test`
+    );
+    return resp.user || null;
+  },
 };
 
 export const postsApi = {
