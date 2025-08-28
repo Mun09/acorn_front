@@ -1,56 +1,5 @@
-// 환경변수 설정 및 검증
-
+import { Env, envSchema } from "@/types/schema";
 import { z } from "zod";
-
-// 환경변수 스키마 정의
-const envSchema = z.object({
-  // 필수 환경변수
-  NEXT_PUBLIC_API_BASE_URL: z
-    .string()
-    .url("NEXT_PUBLIC_API_BASE_URL must be a valid URL")
-    .min(1, "NEXT_PUBLIC_API_BASE_URL is required"),
-
-  NEXT_PUBLIC_APP_NAME: z
-    .string()
-    .min(1, "NEXT_PUBLIC_APP_NAME is required")
-    .default("Acorn"),
-
-  // 선택적 환경변수 (기본값 제공)
-  NEXT_PUBLIC_APP_URL: z
-    .string()
-    .url("NEXT_PUBLIC_APP_URL must be a valid URL when provided")
-    .optional()
-    .or(z.literal("")),
-
-  NEXT_PUBLIC_APP_VERSION: z
-    .string()
-    .regex(
-      /^\d+\.\d+\.\d+$/,
-      "NEXT_PUBLIC_APP_VERSION must be in semver format (x.y.z)"
-    )
-    .default("1.0.0"),
-
-  // 환경 구분
-  NODE_ENV: z
-    .enum(["development", "production", "test"])
-    .default("development"),
-
-  // 로그 레벨
-  LOG_LEVEL: z.enum(["debug", "info", "warn", "error"]).default("info"),
-
-  // 분석 도구
-  ENABLE_ANALYTICS: z
-    .string()
-    .transform((val: string) => val === "true")
-    .default("false"),
-
-  // 외부 서비스 (선택적)
-  NEXT_PUBLIC_GOOGLE_ANALYTICS_ID: z.string().optional(),
-  NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
-});
-
-// 환경변수 타입 추론
-type Env = z.infer<typeof envSchema>;
 
 // 환경변수 검증 및 파싱 함수
 function validateEnv(): Env {

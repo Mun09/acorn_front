@@ -9,18 +9,12 @@ import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { cn } from "@/lib/utils";
 import { z } from "zod";
-
-const ProfileSchema = z.object({
-  displayName: z
-    .string()
-    .min(1, "표시 이름을 입력해주세요")
-    .max(30, "최대 30자"),
-  bio: z.string().max(200, "자기소개는 200자 이내"),
-});
-type ProfileForm = z.infer<typeof ProfileSchema>;
+import { ProfileForm, ProfileSchema } from "@/types/schema";
+import { useRouter } from "next/navigation";
 
 export default function SettingsPage() {
   const qc = useQueryClient();
+  const router = useRouter();
   const { data: session, isLoading: sessionLoading } = useSession();
   const isAuthenticated = session?.isAuthenticated === true;
   const me = session?.user ?? null;
@@ -77,12 +71,13 @@ export default function SettingsPage() {
     mutationFn: async () => authApi.logout(),
     onSettled: async () => {
       await qc.invalidateQueries({ queryKey: ["session"] });
-      await qc.refetchQueries({ queryKey: ["session"] });
+      // await qc.refetchQueries({ queryKey: ["session"] });
+      router.push("/"); // 홈으로 이동
     },
   });
 
   const deleteAccountMutation = useMutation({
-    mutationFn: async () => authApi.deleteAccount(),
+    mutationFn: async () => authApi.deleteMe(),
     onSuccess: async () => {
       setApiMsg("계정이 삭제되었습니다");
       await qc.invalidateQueries({ queryKey: ["session"] });
@@ -162,7 +157,7 @@ export default function SettingsPage() {
             <label className="text-sm text-muted-foreground">표시 이름</label>
             <Input
               placeholder="표시 이름"
-              value={form.displayName}
+              value={form.displayName ?? ""}
               onChange={(e) => setField("displayName", e.target.value)}
               error={errors.displayName}
             />
@@ -172,7 +167,7 @@ export default function SettingsPage() {
             <label className="text-sm text-muted-foreground">자기소개</label>
             <textarea
               placeholder="한 줄 소개를 입력하세요"
-              value={form.bio}
+              value={form.bio ?? ""}
               onChange={(e) => setField("bio", e.target.value)}
               className={cn(
                 "w-full min-h-[96px] rounded-md border border-input bg-background px-3 py-2 text-sm outline-none",
@@ -185,7 +180,7 @@ export default function SettingsPage() {
           </div>
 
           <div className="flex justify-end gap-2">
-            <Button
+            {/* <Button
               variant="outline"
               type="button"
               disabled={busy}
@@ -199,7 +194,7 @@ export default function SettingsPage() {
               }}
             >
               되돌리기
-            </Button>
+            </Button> */}
             <Button type="button" disabled={busy} onClick={onSaveProfile}>
               저장
             </Button>
@@ -234,7 +229,7 @@ export default function SettingsPage() {
       {/* 위험 구역 */}
       <section className="border border-border rounded-lg p-6">
         <h3 className="text-lg font-semibold mb-4 text-destructive">
-          위험 구역
+          위험한 구역
         </h3>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">

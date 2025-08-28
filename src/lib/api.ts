@@ -5,7 +5,11 @@ import { env, logger, isDevelopment } from "./config";
 import { UserProfile } from "@/types/user";
 import { Post } from "@/types";
 import { auth } from "./firebaseClient";
-import { MeResponseSchema } from "@/types/schema";
+import {
+  MeResponseSchema,
+  ProfileForm,
+  UpdateUserRequest,
+} from "@/types/schema";
 
 // 공통 에러 타입
 export interface ApiError {
@@ -308,6 +312,10 @@ export const authApi = {
 
   getMe: () => apiClient.get("/api/auth/me", MeResponseSchema),
 
+  deleteMe: () => apiClient.delete("/api/auth/me"),
+
+  patchMe: (data: UpdateUserRequest) => apiClient.patch("/api/auth/me", data),
+
   createSessionCookie: (idToken: string) =>
     apiClient.post("/api/auth/session-cookie", { idToken }),
 
@@ -411,7 +419,7 @@ export const usersApi = {
     return { posts, nextCursor, hasMore, raw: resp };
   },
 
-  updateProfile: (data: any) => apiClient.patch("/api/users/me", data),
+  updateProfile: (data: ProfileForm) => apiClient.patch("/api/users/me", data),
 
   followUser: (handle: string): Promise<void> =>
     apiClient.post(`/api/users/${handle}/follow`).then(() => {}),

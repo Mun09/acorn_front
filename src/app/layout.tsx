@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers/Providers";
 import { Sidebar } from "@/components/Sidebar";
-import { PopularSymbolsWidget } from "@/components/PopularSymbolsWidget";
+// import { PopularSymbolsWidget } from "@/components/PopularSymbolsWidget";
 
 // 폰트 설정
 const inter = Inter({ subsets: ["latin"] });
@@ -58,7 +58,7 @@ export default function RootLayout({
               </main>
 
               {/* 우측 사이드바 위젯 */}
-              <PopularSymbolsWidget />
+              {/* <PopularSymbolsWidget /> */}
             </div>
           </div>
 
