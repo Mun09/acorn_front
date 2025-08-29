@@ -8,7 +8,7 @@ import { UserPostsList } from "../posts/UserPostList";
 import { FollowButton } from "./FollowButton";
 
 type ProfileContentProps = {
-  profileHandle: string; // 표시할 대상 유저
+  profileHandle?: string; // 표시할 대상 유저
   viewerHandle?: string; // 로그인 유저 (없으면 비로그인)
 };
 
@@ -18,6 +18,8 @@ export function ProfileContent({
 }: ProfileContentProps) {
   const isOwn = !!viewerHandle && viewerHandle === profileHandle;
   const cacheKey = ["profile", profileHandle];
+
+  if (!profileHandle) return null;
 
   const {
     data: profile,
@@ -57,8 +59,6 @@ export function ProfileContent({
   const trustScore = profile.trustScore ?? 0;
   const bio = profile.bio || "";
   const isFollowing = profile.isFollowing || false;
-
-  console.log(profile);
 
   return (
     <div className="max-w-2xl mx-auto space-y-6 p-4">

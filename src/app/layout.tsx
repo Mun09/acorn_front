@@ -8,8 +8,17 @@ import { Sidebar } from "@/components/Sidebar";
 // 폰트 설정
 const inter = Inter({ subsets: ["latin"] });
 
-// 메타데이터 설정
+// app/layout.tsx
+import type { Metadata } from "next";
+
+const baseUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : "http://localhost:3000");
+
 export const metadata: Metadata = {
+  metadataBase: new URL(baseUrl), // ★ 중요: 절대경로 기준
   title: {
     default: "Acorn",
     template: "%s | Acorn",
@@ -25,17 +34,16 @@ export const metadata: Metadata = {
     title: "Acorn",
     description: "Modern social platform for financial discussions",
     siteName: "Acorn",
+    images: ["/og/icon.png"], // ★ 여기 추가
   },
   twitter: {
     card: "summary_large_image",
     title: "Acorn",
     description: "Modern social platform for financial discussions",
     creator: "@acorn",
+    images: ["/og/icon.png"], // ★ 여기 추가
   },
-  robots: {
-    index: true,
-    follow: true,
-  },
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({

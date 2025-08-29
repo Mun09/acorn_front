@@ -66,7 +66,6 @@ export default function HomePage() {
       if (pageParam) {
         params.append("cursor", pageParam);
       }
-      console.log(params.toString());
       return postsApi.getFeed(params.toString());
     },
     getNextPageParam: (lastPage: any) => {
@@ -196,7 +195,7 @@ export default function HomePage() {
           </div>
 
           {/* 새로고침 버튼 */}
-          <div className="mb-4">
+          {/* <div className="mb-4">
             <Button
               onClick={() => refetch()}
               disabled={isLoading}
@@ -205,7 +204,7 @@ export default function HomePage() {
             >
               새로고침
             </Button>
-          </div>
+          </div> */}
 
           {/* 에러 상태 */}
           {isError && (

@@ -26,6 +26,6 @@ export default function ProfilePage() {
   }
 
   // 세션이 확정된 뒤에만 "내용 컴포넌트" 렌더 → 내부 훅 순서가 항상 일정
-  const handle = (session.user as any)?.handle as string;
+  const handle = session.user?.handle;
   return <ProfileContent profileHandle={handle} viewerHandle={handle} />;
 }

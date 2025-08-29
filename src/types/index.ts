@@ -163,27 +163,13 @@ export interface InputProps extends ComponentProps {
   disabled?: boolean;
 }
 
-// 알림 관련 타입
-export type NotificationKind = "MENTION" | "REPLY" | "REACTION" | "FOLLOW";
-
-export interface Notification {
-  id: number;
-  userId: number;
-  kind: NotificationKind;
-  payload: any;
-  readAt: string | null;
-  createdAt: string;
+export interface FollowPayload {
+  fromHandle: string;
+  fromUserId: number;
+  message: string;
 }
 
-export interface NotificationResponse {
-  notifications: Notification[];
-  pagination: {
-    page: number;
-    limit: number;
-    total: number;
-    pages: number;
-  };
-}
+export type NotificationPayload = FollowPayload;
 
 // 검색 관련 타입
 export interface SearchUser {

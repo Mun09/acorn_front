@@ -1,18 +1,11 @@
+// NotificationsPage.tsx
+
 "use client";
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import {
-  Bell,
-  MessageCircle,
-  Heart,
-  Reply,
-  User,
-  ArrowLeft,
-  Check,
-  CheckCheck,
-} from "lucide-react";
+import { Bell, ArrowLeft, CheckCheck } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "@/hooks/useSession";
 import { Button } from "@/components/ui/Button";
@@ -20,84 +13,18 @@ import {
   Notification as ApiNotification,
   NotificationKind,
   NotificationResponse,
-} from "@/types";
+} from "@/types/notification";
 import { notificationsApi } from "@/lib/api";
+import { NotificationCard } from "@/features/notifications/NotificationCard";
 
 type FilterType = "all" | NotificationKind;
 
-// 알림 타입별 아이콘 매핑
-const getNotificationIcon = (kind: NotificationKind) => {
-  switch (kind) {
-    case "MENTION":
-      return <User className="w-4 h-4 text-blue-500" />;
-    case "REACTION":
-      return <Heart className="w-4 h-4 text-red-500" />;
-    case "REPLY":
-      return <Reply className="w-4 h-4 text-green-500" />;
-    case "FOLLOW":
-      return <User className="w-4 h-4 text-purple-500" />;
-    default:
-      return <Bell className="w-4 h-4 text-gray-500" />;
-  }
-};
-
-// 알림 타입별 텍스트 매핑
-const getNotificationText = (notification: ApiNotification) => {
-  const { kind, payload } = notification;
-
-  switch (kind) {
-    case "MENTION":
-      return `${payload?.fromUser?.displayName || payload?.fromUser?.handle || "Someone"}님이 회원님을 언급했습니다`;
-    case "REACTION":
-      return `${payload?.fromUser?.displayName || payload?.fromUser?.handle || "Someone"}님이 회원님의 포스트에 ${payload?.reactionType === "LIKE" ? "좋아요" : "반응"}를 남겼습니다`;
-    case "REPLY":
-      return `${payload?.fromUser?.displayName || payload?.fromUser?.handle || "Someone"}님이 회원님의 포스트에 답글을 남겼습니다`;
-    case "FOLLOW":
-      return `${payload?.fromUser?.displayName || payload?.fromUser?.handle || "Someone"}님이 회원님을 팔로우했습니다`;
-    default:
-      return "새로운 알림이 있습니다";
-  }
-};
-
-// 알림 타입별 배지 색상
-const getNotificationBadge = (kind: NotificationKind) => {
-  switch (kind) {
-    case "MENTION":
-      return "bg-blue-100 text-blue-700 border border-blue-200";
-    case "REACTION":
-      return "bg-red-100 text-red-700 border border-red-200";
-    case "REPLY":
-      return "bg-green-100 text-green-700 border border-green-200";
-    case "FOLLOW":
-      return "bg-purple-100 text-purple-700 border border-purple-200";
-    default:
-      return "bg-gray-100 text-gray-700 border border-gray-200";
-  }
-};
-
-// 알림 타입별 라벨
-const getNotificationLabel = (kind: NotificationKind) => {
-  switch (kind) {
-    case "MENTION":
-      return "멘션";
-    case "REACTION":
-      return "반응";
-    case "REPLY":
-      return "답글";
-    case "FOLLOW":
-      return "팔로우";
-    default:
-      return "알림";
-  }
-};
-
 export default function NotificationsPage() {
-  const { data: session } = useSession();
+  const { data: session, isLoading: isSessionLoading } = useSession();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
 
-  // 알림 목록 쿼리
   const { data, isLoading, error } = useQuery<NotificationResponse>({
     queryKey: ["notifications", activeFilter],
     queryFn: async () => {
@@ -105,39 +32,30 @@ export default function NotificationsPage() {
       if (activeFilter !== "all") {
         params.append("type", activeFilter);
       }
-      return notificationsApi.getNotifications(
+      const response = notificationsApi.getNotifications(
         params.toString()
       ) as Promise<NotificationResponse>;
+      return response;
     },
     enabled: !!session?.user,
   });
 
-  // 개별 알림 읽음 처리
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: number) => {
-      console.log(`Marking notification ${notificationId} as read`);
       const { notificationsApi } = await import("@/lib/api");
       return notificationsApi.markAsRead(notificationId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      // unread-count는 실제 변경이 있을 때만 업데이트하도록 최적화
-      // queryClient.invalidateQueries({
-      //   queryKey: ["notifications", "unread-count"],
-      // });
     },
   });
 
-  // 전체 읽음 처리
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
-      console.log("Marking all notifications as read");
-      const { notificationsApi } = await import("@/lib/api");
       return notificationsApi.markAllAsRead();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notifications"] });
-      // 전체 읽음 처리 시에만 unread-count 업데이트
       queryClient.invalidateQueries({
         queryKey: ["notifications", "unread-count"],
       });
@@ -145,76 +63,32 @@ export default function NotificationsPage() {
   });
 
   const handleNotificationClick = async (notification: ApiNotification) => {
-    // 읽지 않은 알림이면 읽음 처리
+    // 읽음 처리
     if (!notification.readAt) {
       await markAsReadMutation.mutateAsync(notification.id);
     }
 
-    // 관련 포스트로 이동 (payload에서 postId 추출)
-    if (notification.payload?.postId) {
-      router.push(`/post/${notification.payload.postId}`);
+    // 이동 로직
+    const payload: any = notification.payload;
+
+    if (payload?.postId) {
+      router.push(`/post/${payload.postId}`);
+      return;
+    }
+
+    if (notification.kind === "SYSTEM") {
+      if (payload?.linkUrl) {
+        // 공지 상세 페이지 링크가 있으면 해당 링크로
+        router.push(payload.linkUrl);
+        return;
+      }
+      // 링크가 없으면 공지 모아보기 등으로 fallback
+      router.push("/notices");
+      return;
     }
   };
 
-  const NotificationCard = ({
-    notification,
-  }: {
-    notification: ApiNotification;
-  }) => (
-    <div
-      className={`p-4 border-b border-gray-100 hover:bg-gray-50 cursor-pointer transition-colors ${
-        !notification.readAt ? "bg-blue-50/50" : ""
-      }`}
-      onClick={() => handleNotificationClick(notification)}
-    >
-      <div className="flex items-start space-x-3">
-        <div className="flex-shrink-0">
-          {getNotificationIcon(notification.kind)}
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
-                {notification.payload?.fromUser?.handle
-                  ?.charAt(0)
-                  .toUpperCase() || "?"}
-              </div>
-              <span className="text-sm text-gray-600">
-                @{notification.payload?.fromUser?.handle || "unknown"}
-              </span>
-            </div>
-            <div className="flex items-center space-x-2">
-              <span
-                className={`text-xs px-2 py-1 rounded-full ${getNotificationBadge(notification.kind)}`}
-              >
-                {getNotificationLabel(notification.kind)}
-              </span>
-              {!notification.readAt && (
-                <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></div>
-              )}
-            </div>
-          </div>
-
-          <p className="text-sm text-gray-800 mb-2">
-            {getNotificationText(notification)}
-          </p>
-
-          {notification.payload?.postContent && (
-            <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded mb-2">
-              {notification.payload.postContent.length > 100
-                ? `${notification.payload.postContent.substring(0, 100)}...`
-                : notification.payload.postContent}
-            </div>
-          )}
-
-          <div className="text-xs text-gray-400">
-            {new Date(notification.createdAt).toLocaleString("ko-KR")}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  if (isSessionLoading) return null;
 
   if (!session?.user) {
     return (
@@ -241,6 +115,7 @@ export default function NotificationsPage() {
     { key: "REACTION", label: "반응" },
     { key: "REPLY", label: "답글" },
     { key: "FOLLOW", label: "팔로우" },
+    { key: "SYSTEM", label: "공지" },
   ];
 
   const unreadCount = data?.notifications.filter((n) => !n.readAt).length || 0;
@@ -327,6 +202,7 @@ export default function NotificationsPage() {
               <NotificationCard
                 key={notification.id}
                 notification={notification}
+                onClick={handleNotificationClick}
               />
             ))}
           </div>

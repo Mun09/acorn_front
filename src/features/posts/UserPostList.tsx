@@ -16,7 +16,7 @@ export function UserPostsList({ handle }: { handle: string }) {
     isLoading,
     isError,
   } = useInfiniteQuery({
-    queryKey: ["user-posts", handle],
+    queryKey: ["posts", handle],
     initialPageParam: undefined as string | undefined,
     queryFn: async ({ pageParam }) => {
       return usersApi.getUserPosts(handle, {

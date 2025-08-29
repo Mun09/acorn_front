@@ -118,7 +118,7 @@ export function Sidebar() {
                 alt="ACORN 아이콘"
                 width={32}
                 height={32}
-                placeholder="blur" // 이미지를 불러오는 동안 흐릿하게 표시 (선택 사항)
+                // placeholder="blur" // 이미지를 불러오는 동안 흐릿하게 표시 (선택 사항)
               />
               <span className="text-xl font-bold text-foreground">Acorn</span>
             </Link>
