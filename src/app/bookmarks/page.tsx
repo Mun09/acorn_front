@@ -24,6 +24,8 @@ export default function BookmarksPage() {
     gcTime: 1000 * 60 * 30, // 30분
   });
 
+  console.log("Bookmarks data:", data);
+
   if (isLoading) {
     return (
       <div className="max-w-2xl mx-auto">

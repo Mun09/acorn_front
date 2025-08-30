@@ -47,3 +47,5 @@ next-env.d.ts
 # Misc
 *.tgz
 *.tar.gz
+
+android/

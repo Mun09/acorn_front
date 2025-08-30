@@ -30,9 +30,12 @@ const getNotificationText = (notification: ApiNotification) => {
     case "MENTION":
       return `${payload.fromHandle || "Someone"}님이 회원님을 언급했습니다`;
     case "REACTION":
-      return `${payload.fromHandle || "Someone"}님이 회원님의 포스트에 ${
-        payload.reactionType === "LIKE" ? "좋아요" : "반응"
-      }를 남겼습니다`;
+      return (
+        payload.message ||
+        `${payload.fromHandle || "Someone"}님이 회원님의 포스트에 ${
+          payload.reactionType === "LIKE" ? "좋아요" : "반응"
+        }를 남겼습니다`
+      );
     case "REPLY":
       return `${payload.fromHandle || "Someone"}님이 회원님의 포스트에 답글을 남겼습니다`;
     case "FOLLOW":

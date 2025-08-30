@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
 import { formatDistanceToNow } from "date-fns";
 import { ko } from "date-fns/locale";
@@ -11,10 +11,10 @@ import {
   Bookmark,
   MoreHorizontal,
 } from "lucide-react";
-import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { postsApi } from "@/lib/api";
 import { parseRichText } from "@/lib/richText";
-import { Post, MediaItem } from "@/types";
+import { Post } from "@/types";
 import { cn } from "@/lib/utils";
 import { useSession } from "@/hooks/useSession";
 import { useUserReactions } from "@/hooks/useUserReactions";
@@ -30,6 +30,8 @@ function updatePostInCaches(
   postId: number,
   updater: (p: Post) => Post
 ) {
+  console.log("Updating post in caches:", postId);
+  console.log("Current caches:", qc.getQueryData(["post", postId]));
   qc.setQueryData(["post", postId], (old: Post | undefined) =>
     old ? updater(old) : old
   );
@@ -87,20 +89,6 @@ function updatePostInCaches(
       return old;
     }
   );
-
-  // qc.setQueryData(["feed"], (old: any) => {
-  //   if (!old) return old;
-  //   if (Array.isArray(old)) {
-  //     return old.map((p: Post) => (p.id === postId ? updater(p) : p));
-  //   }
-  //   if (Array.isArray(old.items)) {
-  //     return {
-  //       ...old,
-  //       items: old.items.map((p: Post) => (p.id === postId ? updater(p) : p)),
-  //     };
-  //   }
-  //   return old;
-  // });
 }
 
 export const PostCard = React.memo(
@@ -131,7 +119,7 @@ export const PostCard = React.memo(
     // UI는 캐시된 데이터만 사용 (단일 진실의 원천)
     const currentUserReactions = post.userReactions || finalUserReactions;
     const currentReactionCounts = post.reactionCounts || {};
-    console.log("Current user reactions:", currentUserReactions);
+    // console.log("Current user reactions:", currentUserReactions);
 
     // 백엔드에서 받은 데이터를 직접 사용 (메모이제이션)
     const reactionCounts = currentReactionCounts;
@@ -149,36 +137,33 @@ export const PostCard = React.memo(
     // 리액션 뮤테이션 (캐시만을 사용한 낙관적 업데이트)
     const reactMutation = useMutation<
       {
-        success: boolean;
-        data: {
-          action: "added" | "removed";
-          type: "LIKE" | "BOOKMARK" | "BOOST";
-          reactionCounts: Record<string, number>;
-        };
+        action: "added" | "removed";
+        type: "LIKE" | "BOOKMARK" | "BOOST";
+        reactionCounts: Record<string, number>;
       },
       Error,
       { type: "LIKE" | "BOOKMARK" | "BOOST" },
       { prevDetail?: Post; prevFeed?: any }
     >({
-      mutationFn: ({ type }: { type: "LIKE" | "BOOKMARK" | "BOOST" }) =>
-        postsApi.reactToPost(post.id, type) as Promise<{
+      mutationFn: async ({ type }: { type: "LIKE" | "BOOKMARK" | "BOOST" }) => {
+        const res = (await postsApi.reactToPost(post.id, type)) as {
           success: boolean;
           data: {
             action: "added" | "removed";
             type: "LIKE" | "BOOKMARK" | "BOOST";
             reactionCounts: Record<string, number>;
           };
-        }>,
+        };
+        return res.data;
+      },
 
       onMutate: async ({ type }) => {
         await queryClient.cancelQueries({ queryKey: ["post", post.id] });
-        await queryClient.cancelQueries({ queryKey: ["feed"] });
 
         const prevDetail = queryClient.getQueryData<Post>(["post", post.id]);
-        const prevFeed = queryClient.getQueryData(["feed"]);
 
         if (!prevDetail) {
-          queryClient.setQueryData(["post", post.id], post);
+          queryClient.setQueryData<Post>(["post", post.id], post);
           console.log("Post not in cache, setting initial data:", post);
         }
 
@@ -212,7 +197,7 @@ export const PostCard = React.memo(
         // 캐시만 업데이트 (단일 진실의 원천)
         updatePostInCaches(queryClient, post.id, optimistic);
 
-        return { prevDetail, prevFeed };
+        return { prevDetail };
       },
 
       onError: (_err, _vars, ctx) => {
@@ -224,19 +209,12 @@ export const PostCard = React.memo(
       },
 
       onSuccess: (response: {
-        success: boolean;
-        data: {
-          action: "added" | "removed";
-          type: "LIKE" | "BOOKMARK" | "BOOST";
-          reactionCounts: Record<string, number>;
-        };
+        action: "added" | "removed";
+        type: "LIKE" | "BOOKMARK" | "BOOST";
+        reactionCounts: Record<string, number>;
       }) => {
         // 서버 응답으로 캐시 정정
-        const {
-          action,
-          type,
-          reactionCounts: serverReactionCounts,
-        } = response.data;
+        const { action, type, reactionCounts: serverReactionCounts } = response;
 
         const reconcile = (p: Post): Post => {
           // 서버 응답을 기반으로 정확한 userReactions 계산
@@ -259,6 +237,7 @@ export const PostCard = React.memo(
         };
 
         // 서버 데이터로 캐시 정정
+        console.log("Reconciling with server data:", response);
         updatePostInCaches(queryClient, post.id, reconcile);
       },
 

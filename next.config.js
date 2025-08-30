@@ -1,19 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // 실험적 기능들
-  experimental: {
-    appDir: true, // App Router 활성화
-  },
+  // experimental: {
+  //   appDir: true, // App Router 활성화
+  // },
 
   // 이미지 최적화 설정
   images: {
     domains: ["localhost"], // 허용할 이미지 도메인
     unoptimized: false,
-  },
-
-  // 환경변수 설정
-  env: {
-    CUSTOM_KEY: process.env.CUSTOM_KEY,
   },
 
   // API 라우트 설정

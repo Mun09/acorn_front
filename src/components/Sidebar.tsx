@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import Image from "next/image";
 import acornIcon from "@/assets/icon.png"; // page.tsx 기준 상대 경로
 import { notificationsApi } from "@/lib/api";
+import { Capacitor } from "@capacitor/core";
 
 interface SidebarItem {
   icon: React.ComponentType<{ className?: string }>;
@@ -44,46 +45,49 @@ const sidebarItems: SidebarItem[] = [
   //   label: "Symbols",
   //   href: "/symbols",
   // },
-  {
-    icon: TrendingUp,
-    label: "Trending",
-    href: "/trending",
-  },
-  {
-    icon: Bell,
-    label: "Notifications",
-    href: "/notifications",
-    requireAuth: true,
-  },
+  // {
+  //   icon: TrendingUp,
+  //   label: "Trending",
+  //   href: "/trending",
+  // },
+  // {
+  //   icon: Bell,
+  //   label: "Notifications",
+  //   href: "/notifications",
+  //   requireAuth: true,
+  // },
   // {
   //   icon: MessageCircle,
   //   label: "Messages",
   //   href: "/messages",
   //   requireAuth: true,
   // },
-  {
-    icon: Bookmark,
-    label: "Bookmarks",
-    href: "/bookmarks",
-    requireAuth: true,
-  },
+  // {
+  //   icon: Bookmark,
+  //   label: "Bookmarks",
+  //   href: "/bookmarks",
+  //   requireAuth: true,
+  // },
   {
     icon: User,
     label: "Profile",
     href: "/profile",
     requireAuth: true,
   },
-  {
-    icon: Settings,
-    label: "Settings",
-    href: "/settings",
-    requireAuth: true,
-  },
+  // {
+  //   icon: Settings,
+  //   label: "Settings",
+  //   href: "/settings",
+  //   requireAuth: true,
+  // },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { data: session, isLoading } = useSession();
+  const isNative =
+    (Capacitor as any).isNativePlatform?.() ??
+    Capacitor.getPlatform() !== "web";
 
   // Get unread notifications count
   const { data: unreadCount = 0 } = useQuery({
@@ -178,40 +182,42 @@ export function Sidebar() {
       </aside>
 
       {/* 모바일 하단 네비게이션 */}
-      <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-t border-border">
-        <nav className="flex justify-around py-2">
-          {filteredItems.slice(0, 5).map((item) => {
-            const Icon = item.icon;
-            const isActive = pathname === item.href;
+      {!isNative && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-t border-border">
+          <nav className="flex justify-around py-2">
+            {filteredItems.slice(0, 5).map((item) => {
+              const Icon = item.icon;
+              const isActive = pathname === item.href;
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "flex flex-col items-center space-y-1 px-3 py-2 rounded-lg transition-colors relative",
-                  isActive
-                    ? "text-primary"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon className="w-5 h-5" />
-                <span className="text-xs font-medium">{item.label}</span>
-                {item.href === "/notifications" && unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                    {unreadCount > 99 ? "99+" : unreadCount}
-                  </span>
-                )}
-                {item.badge && item.href !== "/notifications" && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-      </div>
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "flex flex-col items-center space-y-1 px-3 py-2 rounded-lg transition-colors relative",
+                    isActive
+                      ? "text-primary"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <Icon className="w-5 h-5" />
+                  <span className="text-xs font-medium">{item.label}</span>
+                  {item.href === "/notifications" && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                  {item.badge && item.href !== "/notifications" && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                      {item.badge}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
+      )}
     </>
   );
 }

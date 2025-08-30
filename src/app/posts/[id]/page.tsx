@@ -9,6 +9,7 @@ import { MessageCircle, Send, ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useSession } from "@/hooks/useSession";
 import { postsApi } from "@/lib/api";
+import { Post } from "@/types/post";
 
 // 댓글 컴포넌트
 function ReplyCard({ reply }: { reply: any }) {
@@ -153,7 +154,10 @@ export default function PostDetailPage() {
     error: postError,
   } = useQuery({
     queryKey: ["post", postId],
-    queryFn: () => postsApi.getPost(postId),
+    queryFn: async () => {
+      const response: any = await postsApi.getPost(postId);
+      return response.data;
+    },
     enabled: !isNaN(postId),
   });
 
