@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 // 공통 타입 정의
 
 // API 응답 타입
@@ -50,56 +52,82 @@ export interface PostSymbol {
   symbol: Symbol;
 }
 
-export interface Post {
-  id: number;
-  userId: number;
-  text: string; // 백엔드에서 'text'로 반환
-  media?: MediaItem[] | null;
-  createdAt: string;
-  replyTo?: number;
-  quotePostId?: number;
-  isHidden?: boolean;
-  author: {
-    id: number;
-    handle: string;
-    bio?: string;
-    trustScore?: number;
-    verifiedFlags?: any;
-  };
-  symbols?: Array<{
-    raw: string;
-    ticker: string;
-    kind: string;
-    exchange?: string;
-  }>;
-  reactionCounts?: {
-    LIKE?: number;
-    BOOST?: number;
-    BOOKMARK?: number;
-  };
-  userReactions?: string[];
-  score?: number;
-  scoreBreakdown?: any;
-  isFollowing?: boolean;
-  // 호환성을 위한 추가 필드들 (PostCard에서 사용)
-  user: {
-    id: number;
-    handle: string;
-    displayName?: string;
-    email?: string;
-  };
-  _count?: {
-    likes: number;
-    boosts: number;
-    bookmarks: number;
-    replies: number;
-  };
-  isLiked?: boolean;
-  isBoosted?: boolean;
-  isBookmarked?: boolean;
-  reactions?: Reaction[];
-  replies?: Post[];
-}
+export const ReactionSchema = z.object({
+  id: z.number(),
+  postId: z.number(),
+  userId: z.number(),
+  type: z.enum(["LIKE", "BOOKMARK", "BOOST"]),
+  user: z.object({
+    id: z.number(),
+    email: z.string(),
+    handle: z.string(),
+    bio: z.string().nullable().optional(),
+    trustScore: z.number(),
+    verifiedFlags: z.any().optional(),
+    createdAt: z.string(),
+    updatedAt: z.string(),
+  }),
+});
+
+export const PostSchema = z.object({
+  id: z.number(),
+  userId: z.number(),
+  text: z.string(),
+  createdAt: z.string(),
+  replyTo: z.number().optional(),
+  quotePostId: z.number().optional(),
+  isHidden: z.boolean().optional(),
+  author: z.object({
+    id: z.number(),
+    handle: z.string(),
+    bio: z.string().optional(),
+    trustScore: z.number().optional(),
+    verifiedFlags: z.any().optional(),
+  }),
+  symbols: z
+    .array(
+      z.object({
+        raw: z.string(),
+        ticker: z.string(),
+        kind: z.string(),
+        exchange: z.string().optional(),
+      })
+    )
+    .optional(),
+  reactionCounts: z
+    .object({
+      LIKE: z.number().optional(),
+      BOOST: z.number().optional(),
+      BOOKMARK: z.number().optional(),
+    })
+    .optional(),
+  userReactions: z.array(z.string()).optional(),
+  score: z.number().optional(),
+  scoreBreakdown: z.any().optional(),
+  isFollowing: z.boolean().optional(),
+  user: z
+    .object({
+      id: z.number(),
+      handle: z.string(),
+      displayName: z.string().optional(),
+      email: z.string().optional(),
+    })
+    .optional(),
+  _count: z
+    .object({
+      likes: z.number(),
+      boosts: z.number(),
+      bookmarks: z.number(),
+      replies: z.number(),
+    })
+    .optional(),
+  isLiked: z.boolean().optional(),
+  isBoosted: z.boolean().optional(),
+  isBookmarked: z.boolean().optional(),
+  reactions: z.array(ReactionSchema).optional(),
+});
+
+export type Post = z.infer<typeof PostSchema>;
 
 export interface Reaction {
   id: number;

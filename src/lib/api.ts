@@ -10,6 +10,8 @@ import {
   ProfileForm,
   UpdateUserRequest,
 } from "@/types/schema";
+import { Search } from "lucide-react";
+import { SearchSymbolsResponseSchema } from "@/types/search/symbol";
 
 // 공통 에러 타입
 export interface ApiError {
@@ -447,11 +449,17 @@ export const notificationsApi = {
 };
 
 export const searchApi = {
-  search: (query: string, type?: "posts" | "people" | "symbols") => {
-    const params = new URLSearchParams({ q: query });
-    if (type) {
-      params.append("type", type);
-    }
+  search: (options?: {
+    type: "people" | "posts";
+    query?: string;
+    limit?: number;
+    cursor?: string;
+  }) => {
+    const params = new URLSearchParams();
+    if (options?.type) params.append("type", options.type);
+    if (options?.query) params.append("query", options.query);
+    if (options?.limit) params.append("limit", options.limit.toString());
+    if (options?.cursor) params.append("cursor", options.cursor);
     return apiClient.get(`/api/search?${params.toString()}`);
   },
 };
@@ -479,7 +487,10 @@ export const symbolsApi = {
     if (options?.query) params.append("query", options.query);
     if (options?.limit) params.append("limit", options.limit.toString());
     if (options?.cursor) params.append("cursor", options.cursor);
-    return apiClient.get(`/api/symbols/search?${params.toString()}`);
+    return apiClient.get(
+      `/api/symbols/search?${params.toString()}`,
+      SearchSymbolsResponseSchema
+    );
   },
 
   getPopularSymbols: (limit?: number) => {

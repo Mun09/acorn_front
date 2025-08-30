@@ -98,6 +98,7 @@ export const envSchema = z.object({
   // 외부 서비스 (선택적)
   NEXT_PUBLIC_GOOGLE_ANALYTICS_ID: z.string().optional(),
   NEXT_PUBLIC_SENTRY_DSN: z.string().optional(),
+  INFINITE_SCROLL_PAGE_SIZE: z.number().min(1),
 });
 
 export type User = z.infer<typeof UserSchema>;

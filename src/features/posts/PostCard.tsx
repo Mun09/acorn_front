@@ -273,7 +273,6 @@ export const PostCard = React.memo(
     };
 
     // 백엔드 응답 구조에 맞게 데이터 변환 (메모이제이션)
-    const postMedia = useMemo(() => post.media || [], [post.media]);
     const postText = useMemo(() => post.text || "", [post.text]);
     const symbols = useMemo(() => post.symbols || [], [post.symbols]);
 
@@ -291,12 +290,6 @@ export const PostCard = React.memo(
 
     // 텍스트 파싱 (메모이제이션)
     const tokens = useMemo(() => parseRichText(postText), [postText]);
-
-    // 미디어 파싱 (JSON string → array, 메모이제이션)
-    const mediaItems: MediaItem[] = useMemo(() => {
-      if (!postMedia) return [];
-      return typeof postMedia === "string" ? JSON.parse(postMedia) : postMedia;
-    }, [postMedia]);
 
     // 텍스트 렌더링 (메모이제이션)
     const renderText = useMemo(() => {
@@ -406,56 +399,6 @@ export const PostCard = React.memo(
             <div className="text-foreground mb-3 whitespace-pre-wrap break-words">
               {renderText}
             </div>
-
-            {/* 미디어 */}
-            {mediaItems.length > 0 && (
-              <div
-                className={cn(
-                  "grid gap-2 mb-3 rounded-lg overflow-hidden",
-                  getMediaGridClass(mediaItems.length)
-                )}
-              >
-                {mediaItems
-                  .slice(0, 4)
-                  .map((item: MediaItem, index: number) => (
-                    <div
-                      key={index}
-                      className={cn(
-                        "relative bg-muted",
-                        mediaItems.length === 3 && index === 0
-                          ? "row-span-2"
-                          : "",
-                        mediaItems.length === 3 && index > 0
-                          ? "aspect-square"
-                          : "aspect-video"
-                      )}
-                    >
-                      {item.type === "image" ? (
-                        <img
-                          src={item.url}
-                          alt=""
-                          className="w-full h-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <video
-                          src={item.url}
-                          controls
-                          className="w-full h-full object-cover"
-                          preload="metadata"
-                        />
-                      )}
-                      {mediaItems.length > 4 && index === 3 && (
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                          <span className="text-white font-medium">
-                            +{mediaItems.length - 4}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            )}
 
             {/* 리액션 버튼들 */}
             <div className="flex items-center space-x-8 text-muted-foreground">

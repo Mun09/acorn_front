@@ -16,6 +16,10 @@ function validateEnv(): Env {
       NEXT_PUBLIC_GOOGLE_ANALYTICS_ID:
         process.env.NEXT_PUBLIC_GOOGLE_ANALYTICS_ID,
       NEXT_PUBLIC_SENTRY_DSN: process.env.NEXT_PUBLIC_SENTRY_DSN,
+      INFINITE_SCROLL_PAGE_SIZE: parseInt(
+        process.env.INFINITE_SCROLL_PAGE_SIZE ?? "20",
+        10
+      ),
     };
 
     // Zod로 검증

@@ -8,9 +8,6 @@ import { Sidebar } from "@/components/Sidebar";
 // 폰트 설정
 const inter = Inter({ subsets: ["latin"] });
 
-// app/layout.tsx
-import type { Metadata } from "next";
-
 const baseUrl =
   process.env.NEXT_PUBLIC_SITE_URL ??
   (process.env.VERCEL_URL
